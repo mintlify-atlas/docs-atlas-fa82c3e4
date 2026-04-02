@@ -1,0 +1,107 @@
+---
+title: "Configuration overview"
+description: "How to configure Syft using CLI flags, environment variables, and config files."
+---
+
+Syft can be configured at three levels: CLI flags, environment variables, and a YAML config file. When the same option is set in multiple places, Syft uses the following priority order (highest to lowest):
+
+1. CLI flags
+2. Environment variables
+3. Config file
+4. Built-in defaults
+
+## Config file locations
+
+Syft searches for a config file in these locations, in order:
+
+1. Path passed with `--config` / `-c`
+2. `.syft.yaml` in the current working directory
+3. `~/.syft.yaml`
+4. `~/.config/syft/config.yaml`
+
+The first file found is used. Syft does not merge multiple config files.
+
+```bash
+# Use a specific config file
+syft alpine:latest --config /path/to/my-config.yaml
+
+# Check which config file is active
+syft --config /dev/null alpine:latest
+```
+
+## Environment variables
+
+Every config file key can be set as an environment variable by converting the key to uppercase and prefixing it with `SYFT_`. Nested keys are separated with `_`.
+
+```bash
+# Equivalent to scope: all-layers in a config file
+export SYFT_SCOPE=all-layers
+
+# Equivalent to file.metadata.selection: all
+export SYFT_FILE_METADATA_SELECTION=all
+
+# Equivalent to log.level: debug
+export SYFT_LOG_LEVEL=debug
+```
+
+<Note>
+Environment variable names follow the YAML key path. For example, `file.metadata.digests` becomes `SYFT_FILE_METADATA_DIGESTS`.
+</Note>
+
+## Example config file
+
+The following is a realistic `.syft.yaml` covering the most commonly tuned options:
+
+```yaml
+# .syft.yaml
+
+# Which layers to catalog (squashed | all-layers | deep-squashed)
+scope: squashed
+
+# Cataloger selection
+default-catalogers: []       # defaults to "image" or "directory" based on source type
+select-catalogers: []        # expressions to add (+), remove (-), or filter catalogers
+
+# File cataloging
+file:
+  metadata:
+    selection: owned-by-package   # none | owned-by-package | all
+    digests:
+      - sha1
+      - sha256
+  content:
+    globs: []                     # glob patterns for file-content cataloging
+    skip-files-above-size: 256000 # bytes; files larger than this are skipped
+  executable:
+    globs: []                     # additional globs to restrict executable cataloging
+
+# Parallelism (0 = auto based on CPU count, -1 = unbounded)
+parallelism: 0
+
+# Output format(s) — use "FORMAT" for stdout or "FORMAT=PATH" to write to a file
+output:
+  - syft-json=./sbom.syft.json
+  - cyclonedx-json
+
+# Logging
+log:
+  level: warn       # error | warn | info | debug | trace
+  file: ""          # optional path to write log output
+```
+
+## Related topics
+
+<CardGroup cols={2}>
+  <Card title="Catalogers" href="/configuration/catalogers" icon="package">
+    Choose which package catalogers run and how to select them by name or tag.
+  </Card>
+  <Card title="Scan scopes" href="/configuration/scopes" icon="layers">
+    Control which layers of a container image Syft catalogs.
+  </Card>
+  <Card title="File cataloging" href="/configuration/file-cataloging" icon="file">
+    Configure how Syft catalogs files alongside packages.
+  </Card>
+  <Card title="Output formats" href="/guides/output-formats" icon="file-output">
+    Choose SBOM output formats such as SPDX, CycloneDX, and Syft JSON.
+  </Card>
+</CardGroup>

@@ -1,0 +1,334 @@
+---
+title: "CLI reference"
+description: "Complete reference for all Syft CLI commands and flags."
+---
+
+Syft is invoked as `syft [command] [flags] [source]`. The root command and `syft scan` share the same behavior and accept the same flags.
+
+## Source schemes
+
+Most commands accept a source argument. You can let Syft infer the type, or prefix the argument with an explicit scheme:
+
+| Scheme | Description |
+|---|---|
+| `docker:<image>` | Pull from the Docker daemon |
+| `podman:<image>` | Pull from the Podman daemon |
+| `registry:<image>` | Pull directly from a registry (no container runtime required) |
+| `docker-archive:<path>` | Read a tarball created by `docker save` |
+| `oci-archive:<path>` | Read an OCI tarball (e.g. from Skopeo) |
+| `oci-dir:<path>` | Read an OCI layout directory |
+| `singularity:<path>` | Read a Singularity Image Format (SIF) file |
+| `oci-model-registry:<ref>` | Scan an OCI model artifact from a registry |
+| `dir:<path>` | Read a directory on disk |
+| `file:<path>` | Read a single file on disk |
+
+---
+
+## Commands
+
+<AccordionGroup>
+
+<Accordion title="syft / syft scan">
+
+**Synopsis**
+
+```text
+syft [SOURCE] [flags]
+syft scan [SOURCE] [flags]
+```
+
+**Description**
+
+Generate a package-based Software Bill of Materials (SBOM) from a container image or filesystem. `syft scan` and the root `syft` command are equivalent; both accept the same flags and source argument.
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `string[]` | `table` | Output format. Use `<format>=<file>` to write to a file. May be specified multiple times. |
+| `-s`, `--scope` | `string` | `squashed` | Layer scope to catalog (`squashed`, `all-layers`, or `deep-squashed`) |
+| `--from` | `string[]` | | Explicitly set the source provider (e.g. `docker`, `registry`, `oci-dir`) |
+| `--platform` | `string` | | Platform specifier for multi-arch images (e.g. `linux/arm64`) |
+| `--exclude` | `string[]` | | Glob patterns for paths to exclude from scanning |
+| `--parallelism` | `int` | auto | Number of cataloger workers to run in parallel |
+| `--enrich` | `string[]` | | Enable data enrichment from local/online sources (`all`, `golang`, `java`, `javascript`, `python`) |
+| `--source-name` | `string` | | Override the name of the analyzed target |
+| `--source-version` | `string` | | Override the version of the analyzed target |
+| `--source-supplier` | `string` | | Set the organization that supplied the component |
+| `--base-path` | `string` | | Base directory for scanning; all paths reported relative to this |
+| `--override-default-catalogers` | `string[]` | | Replace the default cataloger set |
+| `--select-catalogers` | `string[]` | | Add (`+name`), remove (`-name`), or intersect catalogers |
+| `-c`, `--config` | `string` | | Path to a Syft config file |
+| `-q`, `--quiet` | `bool` | `false` | Suppress all output except the SBOM |
+| `-v` | count | | Increase log verbosity (use `-vv` for debug) |
+| `-t`, `--template` | `string` | | Path to a Go template file (required with `-o template`) |
+
+**Usage examples**
+
+```bash
+# Scan a container image (table output, default)
+syft alpine:latest
+
+# Output full JSON SBOM
+syft alpine:latest -o syft-json
+
+# Write CycloneDX JSON to a file
+syft alpine:latest -o cyclonedx-json=sbom.cdx.json
+
+# Scan a local directory
+syft dir:./my-project
+
+# Scan with explicit registry pull
+syft registry:myrepo/myimage:tag
+
+# Use a custom Go template
+syft alpine:latest -o template -t my_format.tmpl
+
+# Produce two outputs at once
+syft alpine:latest -o syft-json=sbom.json -o spdx-json=sbom.spdx.json
+```
+
+</Accordion>
+
+<Accordion title="syft packages">
+
+**Synopsis**
+
+```text
+syft packages [SOURCE] [flags]
+```
+
+**Description**
+
+`syft packages` is an alias for `syft scan`. It accepts the same flags and source argument.
+
+**Usage example**
+
+```bash
+syft packages alpine:latest -o cyclonedx-json
+```
+
+</Accordion>
+
+<Accordion title="syft attest">
+
+**Synopsis**
+
+```text
+syft attest --output [FORMAT] <IMAGE> [flags]
+```
+
+**Description**
+
+Generate a package-based SBOM from a container image and attach it to the image as an [in-toto](https://in-toto.io/) attestation using [Cosign](https://github.com/sigstore/cosign). The attestation is uploaded directly to the image registry.
+
+Requires `cosign` to be installed and available on `PATH`. The image must be accessible from a registry — local Docker images are not supported.
+
+**Allowed output formats**
+
+`syft-json`, `cyclonedx-json`, `spdx-json`, `spdx-tag-value`
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `string` | `syft-json` | SBOM output format for the attestation predicate |
+| `-k`, `--key` | `string` | | Path to a cosign private key for signing. Omit to use keyless (OIDC) mode |
+| `--scope` | `string` | `squashed` | Layer scope to catalog |
+| `--platform` | `string` | | Platform specifier for multi-arch images |
+| `--exclude` | `string[]` | | Glob patterns for paths to exclude |
+| `--override-default-catalogers` | `string[]` | | Replace the default cataloger set |
+| `--select-catalogers` | `string[]` | | Add, remove, or intersect catalogers |
+
+<Note>
+The `password` field for key-based signing also responds to the `COSIGN_PASSWORD` environment variable. Keyless mode requires `COSIGN_EXPERIMENTAL=1` (set automatically).
+</Note>
+
+**Usage examples**
+
+```bash
+# Attest using keyless (OIDC) signing
+syft attest --output syft-json myrepo/myimage:tag
+
+# Attest with a cosign key
+syft attest --output cyclonedx-json --key cosign.key myrepo/myimage:tag
+
+# Retrieve the attestation after upload
+cosign download attestation myrepo/myimage:tag
+```
+
+</Accordion>
+
+<Accordion title="syft convert">
+
+**Synopsis**
+
+```text
+syft convert [SOURCE-SBOM] -o [FORMAT] [flags]
+```
+
+**Description**
+
+Convert an existing SBOM between formats. Accepts a file path or `-` for stdin. This is an experimental feature; some data may be lost during conversion between formats. See the [format conversion wiki](https://github.com/anchore/syft/wiki/format-conversion) for details.
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `string` | | Target output format. Use `<format>=<file>` to write to a file |
+| `-c`, `--config` | `string` | | Path to a Syft config file |
+
+**Usage examples**
+
+```bash
+# Convert a syft JSON SBOM to SPDX JSON
+syft convert img.syft.json -o spdx-json
+
+# Convert and write to a file
+syft convert img.syft.json -o cyclonedx-json=img.cdx.json
+
+# Convert from stdin
+cat sbom.json | syft convert - -o spdx-json
+```
+
+</Accordion>
+
+<Accordion title="syft cataloger list">
+
+**Synopsis**
+
+```text
+syft cataloger list [flags]
+```
+
+**Description**
+
+List all available catalogers with their names and tags. Useful for understanding which catalogers are active for a given configuration, or for constructing `--select-catalogers` and `--override-default-catalogers` expressions.
+
+**Flags**
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-o`, `--output` | `string` | `table` | Output format: `table` or `json` |
+| `-s`, `--show-hidden` | `bool` | `false` | Show catalogers that have been de-selected |
+| `--override-default-catalogers` | `string[]` | `all` | Set the base cataloger set to display |
+| `--select-catalogers` | `string[]` | | Filter the displayed cataloger set |
+
+**Usage examples**
+
+```bash
+# List all catalogers as a table
+syft cataloger list
+
+# List in JSON format
+syft cataloger list -o json
+
+# Show only catalogers selected by the python tag
+syft cataloger list --select-catalogers python
+
+# Show de-selected catalogers too
+syft cataloger list --show-hidden
+```
+
+</Accordion>
+
+<Accordion title="syft cataloger info (experimental)">
+
+**Synopsis**
+
+```text
+syft cataloger info [CATALOGER_NAMES...] [flags]
+```
+
+**Description**
+
+Show detailed capabilities of one or more catalogers, including what file patterns they match and what package types they produce. This is an experimental command enabled by setting the `SYFT_EXP_CAPABILITIES=true` environment variable.
+
+**Usage example**
+
+```bash
+SYFT_EXP_CAPABILITIES=true syft cataloger info python-package-cataloger
+```
+
+</Accordion>
+
+<Accordion title="syft version">
+
+**Synopsis**
+
+```text
+syft version [flags]
+```
+
+**Description**
+
+Print the Syft version string and build metadata.
+
+**Usage example**
+
+```bash
+syft version
+```
+
+</Accordion>
+
+<Accordion title="syft config">
+
+**Synopsis**
+
+```text
+syft config [flags]
+```
+
+**Description**
+
+Print the current Syft configuration resolved from config files, environment variables, and defaults.
+
+**Usage example**
+
+```bash
+syft config
+```
+
+</Accordion>
+
+<Accordion title="syft login">
+
+**Synopsis**
+
+```text
+syft login [flags]
+```
+
+**Description**
+
+Log in to a container registry so that Syft can pull images for scanning.
+
+**Usage example**
+
+```bash
+syft login myregistry.example.com
+```
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Cataloger selection
+
+Syft uses a tag-based selection system for catalogers. The `--override-default-catalogers` flag sets the base set; `--select-catalogers` applies add (`+`), remove (`-`), and intersect expressions on top.
+
+```bash
+# Only run Java catalogers
+syft scan ./app -o syft-json --override-default-catalogers java
+
+# Run defaults, but also add the Nix cataloger
+syft scan ./app --select-catalogers +nix-store-cataloger
+
+# Run defaults, but remove the binary cataloger
+syft scan ./app --select-catalogers -binary-cataloger
+```
+
+Use `syft cataloger list -o json` to discover cataloger names and tags.

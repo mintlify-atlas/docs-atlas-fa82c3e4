@@ -1,0 +1,115 @@
+---
+title: "Scan scopes"
+description: "Control which layers of a container image Syft catalogs."
+---
+
+When scanning a container image, Syft can view its filesystem from different perspectives called *scopes*. The scope controls which layers are inspected and which files are reported. Use the `--scope` / `-s` flag or the `scope` config key to choose.
+
+## Available scopes
+
+| Scope | Value | Description |
+|---|---|---|
+| Squashed *(default)* | `squashed` | Only content visible in the final, merged filesystem — exactly what the running container sees at runtime. |
+| All layers | `all-layers` | Content on every layer, including files that were later deleted or overwritten. |
+| Deep squashed | `deep-squashed` | Walks all layers but only includes files that are visible in the squashed view. Catches packages installed across multiple layers where only the final state matters. |
+
+## When to use each scope
+
+<Tabs>
+  <Tab title="squashed (default)">
+    Use `squashed` when you want an accurate picture of what is installed and running in the container. This is the right choice for most vulnerability scanning and compliance workflows.
+
+    ```bash
+    syft alpine:latest
+    # --scope squashed is the default; this flag is optional
+    syft alpine:latest --scope squashed
+    ```
+
+    **Best for:** Runtime vulnerability analysis, compliance SBOMs, production pipelines.
+  </Tab>
+  <Tab title="all-layers">
+    Use `all-layers` when you need full forensic visibility into every layer, including artifacts that were deleted in a later `RUN` step. This can reveal packages that were present during the build but removed before the final image.
+
+    ```bash
+    syft alpine:latest --scope all-layers
+    ```
+
+    **Best for:** Security audits, build artifact analysis, detecting accidentally included secrets or tools.
+
+    <Note>
+    `all-layers` can report duplicate package entries when a package was modified across layers. If you only care about what is running, prefer `squashed` or `deep-squashed`.
+    </Note>
+  </Tab>
+  <Tab title="deep-squashed">
+    Use `deep-squashed` when packages span multiple layers and you want to catch mutations that `squashed` might miss — for example, a base image that installs a package and a derived image that upgrades it.
+
+    ```bash
+    syft alpine:latest --scope deep-squashed
+    ```
+
+    **Best for:** Multi-stage builds, images where packages are updated across layers, thorough layer-aware scanning without duplicates.
+  </Tab>
+</Tabs>
+
+## Setting the scope
+
+### CLI flag
+
+```bash
+# Short form
+syft alpine:latest -s all-layers
+
+# Long form
+syft alpine:latest --scope all-layers
+
+# Valid values: squashed, all-layers, deep-squashed
+```
+
+### Environment variable
+
+```bash
+export SYFT_SCOPE=all-layers
+syft alpine:latest
+```
+
+### Config file
+
+```yaml
+# .syft.yaml
+scope: all-layers
+```
+
+## Scope and directory scans
+
+The `--scope` flag is accepted when scanning a directory, but only `squashed` is meaningful — there are no image layers to traverse in a directory. All three scope values produce identical results for directory inputs.
+
+```bash
+# These are all equivalent for directory scans
+syft ./my-project
+syft ./my-project --scope squashed
+syft ./my-project --scope all-layers
+```
+
+## Accepted flag values
+
+Syft accepts several aliases for scope values:
+
+| Canonical value | Accepted aliases |
+|---|---|
+| `squashed` | `squashed` |
+| `all-layers` | `all-layers`, `all`, `alllayers` |
+| `deep-squashed` | `deep-squashed`, `deepsquashed`, `squasheddeep`, `squashed-deep`, `deep-squash`, `deepsquash` |
+
+## Related topics
+
+<CardGroup cols={2}>
+  <Card title="Scanning container images" href="/guides/scanning-images" icon="container">
+    Full guide to scanning Docker and OCI images from various sources.
+  </Card>
+  <Card title="Catalogers" href="/configuration/catalogers" icon="package">
+    Control which package catalogers run during a scan.
+  </Card>
+  <Card title="Configuration overview" href="/configuration/overview" icon="sliders">
+    Config file locations, environment variables, and priority order.
+  </Card>
+</CardGroup>

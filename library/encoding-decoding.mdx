@@ -1,0 +1,259 @@
+---
+title: "Encoding and decoding SBOMs"
+description: "Serialize SBOMs to standard formats and decode existing SBOM files."
+---
+
+The `github.com/anchore/syft/syft/format` package handles all serialization and deserialization of `sbom.SBOM` objects. It supports every major SBOM standard.
+
+## Encoding
+
+### format.Encode
+
+```go
+func Encode(s sbom.SBOM, f sbom.FormatEncoder) ([]byte, error)
+```
+
+Serializes an `sbom.SBOM` to bytes using the provided encoder. The encoder determines the output format and version.
+
+```go
+import (
+    "github.com/anchore/syft/syft/format"
+    "github.com/anchore/syft/syft/format/syftjson"
+)
+
+bytes, err := format.Encode(s, syftjson.NewFormatEncoder())
+if err != nil {
+    return err
+}
+fmt.Println(string(bytes))
+```
+
+### Available encoders
+
+Each sub-package exports a `NewFormatEncoder()` constructor and an `ID` constant:
+
+<Tabs>
+  <Tab title="syft-json">
+    ```go
+    import "github.com/anchore/syft/syft/format/syftjson"
+
+    // ID: "syft-json"
+    encoder := syftjson.NewFormatEncoder()
+    ```
+  </Tab>
+  <Tab title="cyclonedx-json">
+    ```go
+    import "github.com/anchore/syft/syft/format/cyclonedxjson"
+
+    // ID: "cyclonedx-json"
+    // Uses the latest supported CycloneDX JSON version by default.
+    encoder, err := cyclonedxjson.NewFormatEncoderWithConfig(
+        cyclonedxjson.DefaultEncoderConfig(),
+    )
+    ```
+  </Tab>
+  <Tab title="cyclonedx-xml">
+    ```go
+    import "github.com/anchore/syft/syft/format/cyclonedxxml"
+
+    // ID: "cyclonedx-xml"
+    encoder, err := cyclonedxxml.NewFormatEncoderWithConfig(
+        cyclonedxxml.DefaultEncoderConfig(),
+    )
+    ```
+  </Tab>
+  <Tab title="spdx-json">
+    ```go
+    import "github.com/anchore/syft/syft/format/spdxjson"
+
+    // ID: "spdx-json"
+    encoder, err := spdxjson.NewFormatEncoderWithConfig(
+        spdxjson.DefaultEncoderConfig(),
+    )
+    ```
+  </Tab>
+  <Tab title="spdx-tag-value">
+    ```go
+    import "github.com/anchore/syft/syft/format/spdxtagvalue"
+
+    // ID: "spdx-tag-value"
+    encoder, err := spdxtagvalue.NewFormatEncoderWithConfig(
+        spdxtagvalue.DefaultEncoderConfig(),
+    )
+    ```
+  </Tab>
+</Tabs>
+
+### Format IDs summary
+
+| Format ID | Package |
+|---|---|
+| `syft-json` | `syft/format/syftjson` |
+| `cyclonedx-json` | `syft/format/cyclonedxjson` |
+| `cyclonedx-xml` | `syft/format/cyclonedxxml` |
+| `spdx-json` | `syft/format/spdxjson` |
+| `spdx-tag-value` | `syft/format/spdxtagvalue` |
+| `table` | `syft/format/table` |
+| `text` | `syft/format/text` |
+| `github` | `syft/format/github` |
+| `purls` | `syft/format/purls` |
+
+### Pinning a specific version
+
+CycloneDX and SPDX encoders support multiple schema versions. Pin one explicitly via the encoder config:
+
+```go
+cfg := cyclonedxjson.DefaultEncoderConfig()
+cfg.Version = "1.5"
+
+encoder, err := cyclonedxjson.NewFormatEncoderWithConfig(cfg)
+```
+
+### EncoderCollection
+
+For applications that need to select a format at runtime, build an `EncoderCollection` from the full set of default encoders:
+
+```go
+import "github.com/anchore/syft/syft/format"
+
+collection := format.NewEncoderCollection(format.Encoders()...)
+
+// Look up an encoder by name@version string, e.g. "cyclonedx-json@1.5"
+encoder := collection.GetByString("cyclonedx-json@1.5")
+if encoder == nil {
+    return fmt.Errorf("format not found")
+}
+
+bytes, err := format.Encode(s, encoder)
+```
+
+```go
+// List all supported name@version strings
+for _, nameVersion := range collection.NameVersions() {
+    fmt.Println(nameVersion)
+}
+```
+
+## Decoding
+
+### format.Decode
+
+```go
+func Decode(reader io.Reader) (*sbom.SBOM, sbom.FormatID, string, error)
+```
+
+Reads an SBOM from any `io.Reader`. Automatically detects the format and version. Returns:
+
+- `*sbom.SBOM` — the decoded SBOM
+- `sbom.FormatID` — the detected format ID (e.g. `"syft-json"`)
+- `string` — the detected schema version
+- `error` — non-nil if decoding fails
+
+```go
+import (
+    "os"
+    "github.com/anchore/syft/syft/format"
+)
+
+f, err := os.Open("sbom.json")
+if err != nil {
+    return err
+}
+defer f.Close()
+
+s, formatID, version, err := format.Decode(f)
+if err != nil {
+    return fmt.Errorf("failed to decode sbom: %w", err)
+}
+
+fmt.Printf("format: %s@%s\n", formatID, version)
+fmt.Printf("packages: %d\n", s.Artifacts.Packages.PackageCount())
+```
+
+### format.Identify
+
+```go
+func Identify(reader io.Reader) (sbom.FormatID, string)
+```
+
+Identifies the format and version of an SBOM without fully decoding it. Returns empty strings if the format cannot be determined.
+
+```go
+f, err := os.Open("sbom.json")
+if err != nil {
+    return err
+}
+defer f.Close()
+
+id, version := format.Identify(f)
+fmt.Printf("detected: %s@%s\n", id, version)
+```
+
+<Note>
+  `Identify` consumes bytes from the reader. If you need to both identify and then decode the same reader, read the contents into a `[]byte` first and wrap it with `bytes.NewReader` for each call.
+</Note>
+
+## Full decode example
+
+From [`examples/decode_sbom/main.go`](https://github.com/anchore/syft/blob/main/examples/decode_sbom/main.go):
+
+```go
+package main
+
+import (
+    "fmt"
+    "os"
+    "strings"
+
+    "github.com/anchore/syft/syft/format"
+)
+
+func main() {
+    sbom, sbomFormat, formatVersion, err := format.Decode(sbomReader())
+    if err != nil {
+        fmt.Printf("failed to decode sbom: %+v\n", err)
+        os.Exit(1)
+    }
+
+    fmt.Printf("SBOM format: %s@%s\n", sbomFormat, formatVersion)
+
+    fmt.Println("\nPackages found:")
+    for _, pkg := range sbom.Artifacts.Packages.Sorted() {
+        fmt.Printf("   %s : %s@%s (%s)\n", pkg.ID(), pkg.Name, pkg.Version, pkg.Type)
+    }
+
+    fmt.Println("\nFiles found:")
+    for c, f := range sbom.Artifacts.FileMetadata {
+        fmt.Printf("   %s : %s\n", c.ID(), f.Path)
+    }
+}
+
+func sbomReader() io.Reader {
+    if len(os.Args) < 2 {
+        return strings.NewReader(embeddedSBOM)
+    }
+    f, err := os.Open(os.Args[1]) //nolint:gosec
+    if err != nil {
+        panic(err)
+    }
+    return f
+}
+```
+
+## Supported decoders
+
+`format.Decode` and `format.Identify` try the following decoders in order:
+
+| Format |
+|---|
+| `syft-json` |
+| `cyclonedx-xml` |
+| `cyclonedx-json` |
+| `spdx-tag-value` |
+| `spdx-json` |
+| `purls` |
+| `cpes` |
+
+<Tip>
+  To build a custom decoder collection with a specific subset of formats, use `format.NewDecoderCollection(format.Decoders()...)` and call `.Decode(reader)` or `.Identify(reader)` on the collection directly.
+</Tip>

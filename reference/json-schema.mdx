@@ -1,0 +1,278 @@
+---
+title: "Syft JSON schema"
+description: "Structure and versioning of Syft's native JSON SBOM format."
+---
+
+The `syft-json` format is Syft's native output format. It captures the full fidelity of Syft's cataloging output — every package, file, relationship, and source detail — in a structured, versioned JSON document.
+
+Produce a Syft JSON SBOM with:
+
+```bash
+syft <source> -o syft-json
+syft <source> -o syft-json=sbom.json
+```
+
+---
+
+## Schema versioning
+
+Syft JSON uses a **SchemaVer** versioning scheme (`MODEL.REVISION.ADDITION`) that diverges slightly from SemVer to reflect data-model compatibility:
+
+| Segment | Meaning |
+|---|---|
+| `MODEL` | Breaking change; incompatible with all previous data |
+| `REVISION` | Breaking change for some historical data |
+| `ADDITION` | Backward-compatible addition |
+
+The current schema version is embedded in every document under the `schema.version` field. The latest schema is **`16.1.3`** (schema ID `anchore.io/schema/syft/json/16.1.3/document`).
+
+<Note>
+Schema versions are never deleted or modified after release. Every historical schema file is preserved in `schema/json/` in the Syft repository.
+</Note>
+
+Every document includes a `schema` block that points to the canonical validation document:
+
+```json
+"schema": {
+  "version": "16.1.3",
+  "url": "https://raw.githubusercontent.com/anchore/syft/main/schema/json/schema-16.1.3.json"
+}
+```
+
+---
+
+## Schema files
+
+Schema files live in the `schema/json/` directory of the Syft repository. The naming convention is `schema-<version>.json`.
+
+<CodeGroup>
+
+```text Latest schema
+schema/json/schema-latest.json
+schema/json/schema-16.1.3.json
+```
+
+```text Historical examples
+schema/json/schema-1.0.0.json
+schema/json/schema-7.1.6.json
+schema/json/schema-11.0.2.json
+schema/json/schema-16.0.43.json
+```
+
+</CodeGroup>
+
+`schema-latest.json` is a symlink to the most recently released schema file. Use versioned file names in long-lived integrations.
+
+---
+
+## Top-level document structure
+
+A Syft JSON document has the following top-level fields:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `artifacts` | `Package[]` | Yes | All packages discovered during cataloging |
+| `artifactRelationships` | `Relationship[]` | Yes | Directed edges between artifacts (package↔file, package↔package) |
+| `files` | `File[]` | No | File-level metadata, digests, and licenses |
+| `source` | `Source` | Yes | The scanned subject (image, directory, or file) |
+| `distro` | `LinuxRelease` | Yes | Linux distribution detected from the source |
+| `descriptor` | `Descriptor` | Yes | Tool identity and configuration used to generate this SBOM |
+| `schema` | `Schema` | Yes | Schema version and URL |
+
+---
+
+## Key type definitions
+
+<AccordionGroup>
+
+<Accordion title="Package">
+
+Represents a software package discovered during cataloging.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique identifier within this document |
+| `name` | `string` | Package name |
+| `version` | `string` | Package version |
+| `type` | `string` | Package type (e.g. `rpm`, `deb`, `npm`, `go-module`) |
+| `foundBy` | `string` | Name of the cataloger that found this package |
+| `locations` | `Location[]` | File paths where this package was found |
+| `licenses` | `License[]` | Licenses associated with this package |
+| `language` | `string` | Programming language (for language packages) |
+| `cpes` | `CPE[]` | Common Platform Enumeration identifiers |
+| `purl` | `string` | Package URL (purl) |
+| `metadataType` | `string` | Discriminator for the `metadata` field |
+| `metadata` | varies | Ecosystem-specific metadata (e.g. `ApkDbEntry`, `RpmArchive`, `JavaArchive`) |
+
+</Accordion>
+
+<Accordion title="Relationship">
+
+Represents a directed edge between two artifacts.
+
+| Field | Type | Description |
+|---|---|---|
+| `parent` | `string` | ID of the parent artifact |
+| `child` | `string` | ID of the child artifact |
+| `type` | `string` | Relationship type (e.g. `contains`, `dependency-of`, `ancestor-of`) |
+| `metadata` | any | Optional additional relationship metadata |
+
+</Accordion>
+
+<Accordion title="File">
+
+Represents a file discovered during cataloging with its associated metadata.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique file identifier |
+| `location` | `Coordinates` | File path and image layer information |
+| `metadata` | `FileMetadataEntry` | Filesystem metadata (permissions, ownership, type) |
+| `contents` | `string` | File content (for small files when content cataloging is enabled) |
+| `digests` | `Digest[]` | Cryptographic hashes (algorithm + hex value) |
+| `licenses` | `FileLicense[]` | Licenses found within this file |
+| `executable` | `Executable` | Executable metadata for binary files |
+| `unknowns` | `string[]` | Unknown fields preserved for forward compatibility |
+
+</Accordion>
+
+<Accordion title="Source">
+
+Describes the artifact that was scanned.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | Unique identifier for the source artifact |
+| `name` | `string` | Artifact name (e.g. image name, directory path) |
+| `version` | `string` | Artifact version (e.g. image tag) |
+| `supplier` | `string` | Organization that supplied the component |
+| `type` | `string` | Source type: `image`, `directory`, or `file` |
+| `metadata` | varies | Source-specific metadata (image manifest, file digests, etc.) |
+
+</Accordion>
+
+<Accordion title="Descriptor">
+
+Identifies the tool that generated this SBOM.
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `string` | Tool name (always `"syft"`) |
+| `version` | `string` | Syft version used to generate this document |
+| `configuration` | any | Syft configuration active at scan time |
+
+</Accordion>
+
+<Accordion title="Schema">
+
+Points to the schema version and validation document.
+
+| Field | Type | Description |
+|---|---|---|
+| `version` | `string` | SchemaVer string (e.g. `"16.1.3"`) |
+| `url` | `string` | URL to the JSON schema definition file |
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Minimal example document
+
+The following illustrates the shape of a minimal `syft-json` document. Real output will contain many more packages, relationships, and metadata fields.
+
+```json
+{
+  "artifacts": [
+    {
+      "id": "d8efd6f6b1f6e4a0",
+      "name": "musl",
+      "version": "1.2.4-r2",
+      "type": "apk",
+      "foundBy": "apk-db-cataloger",
+      "locations": [
+        {
+          "path": "/lib/apk/db/installed"
+        }
+      ],
+      "licenses": [
+        { "value": "MIT", "type": "declared" }
+      ],
+      "language": "",
+      "cpes": ["cpe:2.3:a:musl:musl:1.2.4-r2:*:*:*:*:*:*:*"],
+      "purl": "pkg:apk/alpine/musl@1.2.4-r2?arch=x86_64",
+      "metadataType": "ApkDbEntry",
+      "metadata": {
+        "package": "musl",
+        "version": "1.2.4-r2",
+        "architecture": "x86_64",
+        "maintainer": "Timo Teräs <timo.teras@iki.fi>",
+        "license": "MIT"
+      }
+    }
+  ],
+  "artifactRelationships": [
+    {
+      "parent": "d8efd6f6b1f6e4a0",
+      "child": "a1b2c3d4e5f60001",
+      "type": "contains"
+    }
+  ],
+  "files": [],
+  "source": {
+    "id": "9f8e7d6c5b4a3210",
+    "name": "alpine",
+    "version": "3.19.0",
+    "type": "image",
+    "metadata": {}
+  },
+  "distro": {
+    "prettyName": "Alpine Linux v3.19",
+    "name": "Alpine Linux",
+    "id": "alpine",
+    "versionId": "3.19.0"
+  },
+  "descriptor": {
+    "name": "syft",
+    "version": "1.0.0",
+    "configuration": {}
+  },
+  "schema": {
+    "version": "16.1.3",
+    "url": "https://raw.githubusercontent.com/anchore/syft/main/schema/json/schema-16.1.3.json"
+  }
+}
+```
+
+---
+
+## Validating a Syft JSON document
+
+You can validate any `syft-json` output against its declared schema using any JSON Schema validator that supports Draft 2020-12.
+
+<Tabs>
+  <Tab title="ajv (Node.js)">
+
+```bash
+npm install -g ajv-cli ajv-formats
+ajv validate \
+  -s schema-16.1.3.json \
+  -d sbom.json \
+  --spec=draft2020
+```
+
+  </Tab>
+  <Tab title="check-jsonschema (Python)">
+
+```bash
+pip install check-jsonschema
+check-jsonschema --schemafile schema-16.1.3.json sbom.json
+```
+
+  </Tab>
+</Tabs>
+
+<Tip>
+The schema URL is embedded in each document's `schema.url` field, so you can fetch the correct version automatically rather than hardcoding a schema file path.
+</Tip>

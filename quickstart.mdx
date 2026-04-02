@@ -1,80 +1,168 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Generate your first SBOM with Syft in under five minutes."
 ---
 
-## Get started in three steps
+This guide walks you through scanning a container image, scanning a local directory, choosing an output format, and saving an SBOM to a file.
 
-Get your documentation site running locally and make your first customization.
+<Info>
+  Make sure Syft is installed before you start. See the [Installation](/installation) page if you haven't installed it yet.
+</Info>
 
-### Step 1: Set up your local environment
+<Steps>
+  <Step title="Scan a container image">
+    Pass any image reference to `syft`. Syft pulls the image from the registry (or from your local Docker daemon if it is already present) and prints a package summary to stdout:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    syft alpine:latest
+    ```
 
-### Step 2: Deploy your changes
+    Example output:
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```
+    ✔ Loaded image                                                    alpine:latest
+    ✔ Parsed image                                                    sha256:beefdbd8a1da6d2915566fde36db9db0b524eb737fc57cd1367effd16dc0d06d
+    ✔ Cataloged packages              [14 packages]
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    NAME                    VERSION      TYPE
+    alpine-baselayout       3.4.3-r2     apk
+    alpine-keys             2.4-r1       apk
+    apk-tools               2.14.0-r5    apk
+    busybox                 1.36.1-r5    apk
+    ...
+    ```
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Tip>
+      You can also use explicit source schemes. For example, `syft registry:alpine:latest` pulls directly from the registry without requiring a local Docker daemon.
+    </Tip>
+  </Step>
 
-### Step 3: Go live
+  <Step title="Scan a local directory">
+    Point Syft at any directory on disk to catalogue the packages inside it:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    syft ./my-project
+    ```
+
+    Syft detects the project type automatically and catalogues packages from package manager manifests (e.g. `go.mod`, `package.json`, `requirements.txt`, `pom.xml`) and installed package databases it finds under the path.
+  </Step>
+
+  <Step title="Choose an output format">
+    Use the `-o` flag to select a format. The default output is a human-readable table. For machine-readable SBOMs, choose one of the standard formats:
+
+    <Tabs>
+      <Tab title="CycloneDX JSON">
+        ```bash
+        syft alpine:latest -o cyclonedx-json
+        ```
+      </Tab>
+      <Tab title="CycloneDX XML">
+        ```bash
+        syft alpine:latest -o cyclonedx
+        ```
+      </Tab>
+      <Tab title="SPDX JSON">
+        ```bash
+        syft alpine:latest -o spdx-json
+        ```
+      </Tab>
+      <Tab title="SPDX Tag-Value">
+        ```bash
+        syft alpine:latest -o spdx
+        ```
+      </Tab>
+      <Tab title="Syft JSON">
+        ```bash
+        syft alpine:latest -o json
+        ```
+      </Tab>
+    </Tabs>
+
+    To request a specific version of a format, append `@<version>`:
+
+    ```bash
+    # SPDX 2.2 instead of the default 2.3
+    syft alpine:latest -o spdx-json@2.2
+
+    # CycloneDX 1.4
+    syft alpine:latest -o cyclonedx-json@1.4
+    ```
+  </Step>
+
+  <Step title="Save the SBOM to a file">
+    Append `=<path>` to the format value to write the output to a file instead of stdout:
+
+    ```bash
+    # Write SPDX JSON to a file
+    syft alpine:latest -o spdx-json=./sbom.json
+    ```
+
+    You can write multiple formats in a single scan by repeating the `-o` flag:
+
+    ```bash
+    # Write both SPDX JSON and CycloneDX JSON in one run
+    syft alpine:latest -o spdx-json=./sbom.spdx.json -o cyclonedx-json=./sbom.cdx.json
+    ```
+  </Step>
+
+  <Step title="Scan with verbose output">
+    Add `-vv` to see detailed debug information about what Syft is doing, including which catalogers are active and what files they are examining:
+
+    ```bash
+    syft alpine:latest -vv
+    ```
+  </Step>
+</Steps>
+
+## Common scan targets
+
+<CodeGroup>
+
+```bash Container image (Docker / OCI)
+syft alpine:latest
+syft ubuntu:22.04
+syft my-org/my-app:v1.2.3
+```
+
+```bash Local directory
+syft ./my-project
+syft dir:./my-project
+```
+
+```bash Explicit source schemes
+# Pull directly from registry (no Docker daemon needed)
+syft registry:alpine:latest
+
+# Scan a Docker archive
+syft docker-archive:./my-image.tar
+
+# Scan an OCI archive (e.g. from Skopeo)
+syft oci-archive:./my-image.tar
+
+# Scan a Singularity image
+syft singularity:./my-image.sif
+```
+
+```bash Save to file
+syft alpine:latest -o cyclonedx-json=./sbom.json
+syft ./my-project -o spdx-json=./sbom.spdx.json
+```
+
+</CodeGroup>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Scanning container images" icon="docker" href="/guides/scanning-images">
+    Explore all image source options, registry authentication, and platform selection.
+  </Card>
+  <Card title="Output formats" icon="file-code" href="/guides/output-formats">
+    Understand the differences between CycloneDX, SPDX, and Syft JSON formats.
+  </Card>
+  <Card title="Grype integration" icon="bug" href="/guides/grype-integration">
+    Feed your SBOM into Grype to detect known vulnerabilities.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuration/overview">
+    Set default formats, exclude paths, and tune cataloger behaviour.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

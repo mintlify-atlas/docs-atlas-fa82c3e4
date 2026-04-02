@@ -1,0 +1,207 @@
+---
+title: "Installation"
+description: "Install Syft on Linux, macOS, or Windows using curl, Homebrew, Docker, Scoop, Chocolatey, or Nix."
+---
+
+## Quick install
+
+The fastest way to install Syft on Linux or macOS is with the install script:
+
+```bash
+curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
+```
+
+This downloads the latest release, verifies the checksum, and installs the `syft` binary to `/usr/local/bin`.
+
+<Tip>
+  To install a specific version, append the version tag: `curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin v1.0.0`
+</Tip>
+
+## Install by platform
+
+<Tabs>
+  <Tab title="macOS">
+    **Homebrew** is the recommended method on macOS:
+
+    ```bash
+    brew install syft
+    ```
+
+    Or use the install script:
+
+    ```bash
+    curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
+    ```
+  </Tab>
+  <Tab title="Linux">
+    **Install script** (recommended):
+
+    ```bash
+    curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
+    ```
+
+    To install to a directory you own without `sudo`, change the target path:
+
+    ```bash
+    curl -sSfL https://get.anchore.io/syft | sh -s -- -b ~/.local/bin
+    ```
+
+    Make sure `~/.local/bin` is in your `PATH`.
+  </Tab>
+  <Tab title="Windows">
+    **Scoop:**
+
+    ```powershell
+    scoop install syft
+    ```
+
+    **Chocolatey:**
+
+    ```powershell
+    choco install syft
+    ```
+
+    <Note>
+      On Windows, the install script produces a `.zip` archive containing `syft.exe`. The Scoop and Chocolatey packages handle extraction automatically.
+    </Note>
+  </Tab>
+</Tabs>
+
+## All installation methods
+
+<AccordionGroup>
+  <Accordion title="curl / shell script">
+    The install script fetches the correct binary for your OS and architecture, verifies its SHA-256 checksum, and installs it.
+
+    ```bash
+    # Install latest to /usr/local/bin
+    curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin
+
+    # Install a specific version
+    curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin v1.0.0
+
+    # Enable debug output during install
+    curl -sSfL https://get.anchore.io/syft | sudo sh -s -- -b /usr/local/bin -d
+    ```
+
+    **Script flags:**
+
+    | Flag | Description |
+    |---|---|
+    | `-b DIR` | Installation directory (default: `./bin`) |
+    | `-d` | Enable debug logging |
+    | `-dd` | Enable trace logging |
+    | `-v` | Verify checksum signature using `cosign` |
+    | `TAG` | Install a specific release tag |
+  </Accordion>
+
+  <Accordion title="Homebrew (macOS / Linux)">
+    ```bash
+    brew install syft
+    ```
+
+    Homebrew manages updates alongside your other packages. Run `brew upgrade syft` to update.
+  </Accordion>
+
+  <Accordion title="Docker">
+    Syft is available as a Docker image. Mount the target directory or pass image references directly:
+
+    ```bash
+    # Scan a local directory
+    docker run --rm \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      -v $(pwd):/workspace \
+      anchore/syft:latest /workspace
+
+    # Scan a container image
+    docker run --rm \
+      -v /var/run/docker.sock:/var/run/docker.sock \
+      anchore/syft:latest alpine:latest
+    ```
+
+    <Note>
+      Mount `/var/run/docker.sock` when scanning images from a local Docker daemon. Omit it when scanning directories or using the `registry:` scheme.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Scoop (Windows)">
+    ```powershell
+    scoop install syft
+    ```
+
+    Update with:
+
+    ```powershell
+    scoop update syft
+    ```
+  </Accordion>
+
+  <Accordion title="Chocolatey (Windows)">
+    ```powershell
+    choco install syft
+    ```
+
+    Update with:
+
+    ```powershell
+    choco upgrade syft
+    ```
+  </Accordion>
+
+  <Accordion title="Nix">
+    Syft is available in nixpkgs:
+
+    ```bash
+    nix-env -iA nixpkgs.syft
+    ```
+
+    Or in a Nix flake:
+
+    ```bash
+    nix profile install nixpkgs#syft
+    ```
+  </Accordion>
+
+  <Accordion title="GitHub Releases (manual)">
+    Download pre-built binaries directly from the [GitHub releases page](https://github.com/anchore/syft/releases). Archives are provided for Linux, macOS, and Windows on `amd64`, `arm64`, and other architectures.
+
+    Each release includes a `checksums.txt` file. Verify your download:
+
+    ```bash
+    sha256sum --check checksums.txt
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Verify the installation
+
+After installing, confirm the binary is accessible:
+
+```bash
+syft --version
+```
+
+You should see output like:
+
+```
+syft 1.x.x
+```
+
+## Platform notes
+
+| Platform | Supported architectures | Notes |
+|---|---|---|
+| Linux | `amd64`, `arm64`, `armv7`, `armv6`, `armv5`, `ppc64le`, `s390x` | Full feature support |
+| macOS | `amd64`, `arm64` | Full feature support |
+| Windows | `amd64`, `386` | Binary is `syft.exe`; `.zip` archive instead of `.tar.gz` |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Scan your first image and generate an SBOM.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/configuration/overview">
+    Customize Syft's behaviour with a configuration file.
+  </Card>
+</CardGroup>

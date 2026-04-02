@@ -1,0 +1,104 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Syft",
+  "projectDescription": "A CLI tool and Go library for generating Software Bill of Materials (SBOMs) from container images, filesystems, and archives.",
+  "theme": "aspen",
+  "primaryColor": "#2563EB",
+  "lightColor": "#DBEAFE",
+  "darkColor": "#1E40AF",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/scanning-images",
+              "guides/scanning-filesystems",
+              "guides/output-formats",
+              "guides/attestations",
+              "guides/converting-sboms",
+              "guides/grype-integration"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/overview",
+              "configuration/catalogers",
+              "configuration/scopes",
+              "configuration/file-cataloging"
+            ]
+          },
+          {
+            "group": "Go Library",
+            "pages": [
+              "library/overview",
+              "library/getting-source",
+              "library/creating-sboms",
+              "library/custom-catalogers",
+              "library/encoding-decoding"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/cli",
+              "reference/supported-ecosystems",
+              "reference/sbom-formats",
+              "reference/json-schema"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "SBOM generation from container images (Docker, OCI, Singularity)",
+    "SBOM generation from local filesystems and archives",
+    "Support for 40+ package ecosystems (Alpine, Debian, RPM, Go, Python, Java, JavaScript, Ruby, Rust, PHP, .NET, and more)",
+    "Multiple SBOM output formats: CycloneDX JSON/XML, SPDX JSON/Tag-Value, Syft JSON",
+    "SBOM format conversion between supported standards",
+    "Signed SBOM attestations via in-toto specification",
+    "Seamless integration with Grype vulnerability scanner",
+    "Usable as a Go library with a clean public API",
+    "Extensible cataloger system with custom cataloger support",
+    "Parallel cataloging with configurable concurrency"
+  ],
+  "publicApiSurface": [
+    "syft.GetSource(ctx, userInput, cfg) — resolve any input string to a scannable source",
+    "syft.CreateSBOM(ctx, src, cfg) — catalog a source and produce an SBOM",
+    "syft.DefaultCreateSBOMConfig() — construct default SBOM configuration",
+    "syft.DefaultGetSourceConfig() — construct default source detection configuration",
+    "syft.SetLogger(logger) — configure the logger for the syft library",
+    "syft.SetBus(bus) — configure the event bus for the syft library",
+    "format.Encode(sbom, encoder) — serialize an SBOM to bytes",
+    "format.Decode(reader) — deserialize bytes into an SBOM",
+    "format.Identify(reader) — detect the format of an SBOM byte stream",
+    "format.Encoders() — list all available format encoders",
+    "format.Decoders() — list all available format decoders",
+    "syftjson.NewFormatEncoder() — encoder for Syft JSON format",
+    "cyclonedxjson.NewFormatEncoder() — encoder for CycloneDX JSON format",
+    "cyclonedxxml.NewFormatEncoder() — encoder for CycloneDX XML format",
+    "spdxjson.NewFormatEncoder() — encoder for SPDX JSON format",
+    "spdxtagvalue.NewFormatEncoder() — encoder for SPDX Tag-Value format",
+    "CreateSBOMConfig.WithCatalogers(...) — add custom catalogers",
+    "CreateSBOMConfig.WithSearchConfig(cfg) — configure search scope",
+    "CreateSBOMConfig.WithRelationshipsConfig(cfg) — configure relationship tracking",
+    "source.SquashedScope, source.AllLayersScope, source.DeepSquashedScope — image scan scopes",
+    "CLI: syft scan <target> — scan a container image or filesystem",
+    "CLI: syft attest <target> — create a signed SBOM attestation",
+    "CLI: syft convert <sbom-file> — convert between SBOM formats",
+    "CLI: syft cataloger list — list available catalogers",
+    "CLI: syft packages <target> — alias for scan command"
+  ]
+}

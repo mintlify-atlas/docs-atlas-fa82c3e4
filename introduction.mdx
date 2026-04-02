@@ -1,0 +1,83 @@
+---
+title: "Introduction"
+description: "Syft is a CLI tool and Go library for generating Software Bill of Materials (SBOMs) from container images, filesystems, and archives."
+---
+
+Syft is an open source project from [Anchore](https://anchore.com) that produces a comprehensive, machine-readable inventory — a Software Bill of Materials (SBOM) — of every package and dependency found in a container image or filesystem. It supports all major SBOM standards and is designed to fit naturally into CI/CD pipelines and security workflows.
+
+## What problem does Syft solve?
+
+Modern applications ship inside container images that bundle dozens of operating-system packages, language runtimes, and third-party libraries. Without a complete inventory you cannot answer basic supply chain questions:
+
+- Which packages are actually installed in this image?
+- Does this image contain a package affected by a known CVE?
+- Which open source licenses am I shipping?
+
+Syft answers those questions by scanning a source — an image, a directory, or an archive — and emitting a structured SBOM that other tools (scanners, auditors, policy engines) can consume.
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Broad ecosystem support" icon="layer-group" href="/reference/supported-ecosystems">
+    Catalogues packages from Alpine (apk), Debian (dpkg), RPM, Go modules, Python, Java, JavaScript, Ruby, Rust, PHP, .NET, and many more.
+  </Card>
+  <Card title="Multiple SBOM formats" icon="file-code" href="/reference/sbom-formats">
+    Outputs CycloneDX JSON, CycloneDX XML, SPDX JSON, SPDX Tag-Value, Syft JSON, and plain-text tables. Multiple formats can be written in a single run.
+  </Card>
+  <Card title="Flexible scan targets" icon="magnifying-glass">
+    Scans Docker images, OCI images, Singularity (SIF) images, OCI archives, Docker archives, OCI layout directories, individual files, and plain directories.
+  </Card>
+  <Card title="Signed attestations" icon="shield-check" href="/guides/attestations">
+    Creates cryptographically signed SBOM attestations using the in-toto specification, suitable for supply chain verification workflows.
+  </Card>
+  <Card title="Grype integration" icon="bug" href="/guides/grype-integration">
+    Works directly with Grype — Anchore's vulnerability scanner — to turn an SBOM into a vulnerability report without re-scanning.
+  </Card>
+  <Card title="Go library" icon="code" href="/library/overview">
+    Embed Syft in your own Go programs through its stable public API to generate and encode SBOMs programmatically.
+  </Card>
+</CardGroup>
+
+## Supported image sources
+
+Syft understands multiple source schemes, which you can specify explicitly or let Syft detect automatically:
+
+| Scheme | Description |
+|---|---|
+| `docker:` | Pull from a Docker daemon |
+| `podman:` | Pull from a Podman daemon |
+| `registry:` | Pull directly from a registry (no container runtime required) |
+| `docker-archive:` | Read a tarball created by `docker save` |
+| `oci-archive:` | Read an OCI tarball (e.g. from Skopeo) |
+| `oci-dir:` | Read an OCI layout directory |
+| `singularity:` | Read a Singularity Image Format (SIF) file |
+| `oci-model-registry:` | Scan an OCI model artifact from a registry (e.g. AI/ML models) |
+| `dir:` | Scan any directory on disk |
+| `file:` | Scan a single file on disk |
+
+## When to use Syft
+
+**Use Syft when you need to:**
+
+- Generate an SBOM as part of a build or release pipeline
+- Produce an SBOM artifact to attach to a container image or artifact
+- Feed package inventory data into a vulnerability scanner like Grype
+- Audit open source licenses in a container or codebase
+- Create signed attestations for supply chain compliance
+
+**Consider alternatives if you need:**
+
+- Vulnerability scanning itself — use [Grype](https://github.com/anchore/grype), which can consume Syft's output directly
+- Runtime security monitoring — Syft is a static analysis tool, not a runtime agent
+- Policy enforcement — pair Syft with a policy engine that consumes SBOMs
+
+## Get started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Syft on Linux, macOS, or Windows using the method that suits you.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Scan your first container image and generate an SBOM in minutes.
+  </Card>
+</CardGroup>

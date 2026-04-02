@@ -1,0 +1,132 @@
+---
+title: "Vulnerability scanning with Grype"
+description: "Use Syft with Grype to scan SBOMs for known vulnerabilities."
+---
+
+[Grype](https://github.com/anchore/grype) is a vulnerability scanner built to work natively with Syft. Grype can consume a Syft SBOM directly, or you can pipe Syft's output into Grype in a single command. Together they form a complete software supply chain audit pipeline.
+
+<CardGroup cols={2}>
+  <Card title="Syft" icon="file-lines" href="https://github.com/anchore/syft">
+    Generates the SBOM — a catalogue of every package in your image or filesystem.
+  </Card>
+  <Card title="Grype" icon="shield-halved" href="https://github.com/anchore/grype">
+    Matches packages in an SBOM against vulnerability databases (NVD, GitHub Advisories, OS vendor feeds, and more).
+  </Card>
+</CardGroup>
+
+## Install Grype
+
+```bash
+curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sudo sh -s -- -b /usr/local/bin
+```
+
+See the [Grype repository](https://github.com/anchore/grype) for all installation options.
+
+## Pipe Syft output directly to Grype
+
+The simplest workflow streams Syft's output in Syft JSON format directly into Grype with no intermediate file:
+
+```bash
+syft alpine:latest -o json | grype
+```
+
+Grype auto-detects the Syft JSON format and begins matching packages against the vulnerability database immediately.
+
+<CodeGroup>
+```bash Container image
+syft yourrepo/yourimage:tag -o json | grype
+```
+
+```bash Local directory
+syft ./my-project -o json | grype
+```
+
+```bash Registry (no daemon)
+syft registry:yourrepo/yourimage:tag -o json | grype
+```
+</CodeGroup>
+
+## Use a pre-generated SBOM with Grype
+
+If you already have an SBOM on disk, pass it directly to Grype. Grype supports Syft JSON, CycloneDX (JSON and XML), and SPDX (JSON and Tag-Value):
+
+```bash
+# Generate the SBOM once
+syft alpine:latest -o json=./alpine.syft.json
+
+# Scan it later (or in a separate pipeline stage)
+grype sbom:./alpine.syft.json
+```
+
+This pattern is useful in CI/CD pipelines where the SBOM is produced as an artifact in one stage and security-scanned in another:
+
+<Steps>
+  <Step title="Generate and store the SBOM">
+    ```bash
+    syft yourrepo/yourimage:tag \
+      -o spdx-json=./sbom.spdx.json \
+      -o cyclonedx-json=./sbom.cdx.json
+    ```
+  </Step>
+  <Step title="Archive the SBOM as a pipeline artifact">
+    Upload `sbom.spdx.json` or `sbom.cdx.json` to your artifact store, attaching them to the image build.
+  </Step>
+  <Step title="Scan with Grype">
+    ```bash
+    grype sbom:./sbom.spdx.json
+    ```
+  </Step>
+  <Step title="(Optional) Fail on severity threshold">
+    ```bash
+    grype sbom:./sbom.spdx.json --fail-on high
+    ```
+  </Step>
+</Steps>
+
+## Recommended SBOM format for Grype
+
+While Grype accepts all major SBOM formats, Syft JSON provides the richest package metadata (CPEs, PURLs, file locations) and gives Grype the most data to match against:
+
+```bash
+# Best fidelity for Grype
+syft alpine:latest -o json | grype
+
+# SPDX JSON also works well
+syft alpine:latest -o spdx-json | grype
+```
+
+## Example: full scan workflow
+
+```bash
+# 1. Pull the image
+docker pull myregistry.io/myapp:v1.2.3
+
+# 2. Generate SBOM
+syft myregistry.io/myapp:v1.2.3 -o json=./myapp.sbom.json
+
+# 3. Scan for vulnerabilities
+grype sbom:./myapp.sbom.json
+
+# 4. Fail CI if any critical CVEs are found
+grype sbom:./myapp.sbom.json --fail-on critical
+```
+
+## GitHub Actions example
+
+```yaml
+- name: Install Syft
+  uses: anchore/sbom-action/download-syft@v0
+
+- name: Generate SBOM
+  run: syft ${{ env.IMAGE }} -o json=sbom.json
+
+- name: Install Grype
+  uses: anchore/scan-action/download-grype@v4
+
+- name: Scan SBOM
+  run: grype sbom:sbom.json --fail-on high
+```
+
+<Tip>
+The [anchore/scan-action](https://github.com/anchore/scan-action) GitHub Action wraps both Syft and Grype into a single step and automatically uploads findings to the GitHub Security tab as SARIF.
+</Tip>

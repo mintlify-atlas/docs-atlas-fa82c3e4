@@ -1,0 +1,235 @@
+---
+title: "Custom catalogers"
+description: "Implement and register custom package catalogers with the Syft library."
+---
+
+Syft's cataloging system is open for extension. You can implement the `pkg.Cataloger` interface and inject your cataloger into the pipeline alongside — or instead of — the built-in ones.
+
+## The pkg.Cataloger interface
+
+```go
+// Cataloger describes behavior for an object to participate in parsing container
+// image or file system contents for the purpose of discovering Packages.
+// Each concrete implementation should focus on discovering Packages for a
+// specific Package Type or ecosystem.
+type Cataloger interface {
+    // Name returns a string that uniquely describes a cataloger.
+    Name() string
+
+    // Catalog is given a file.Resolver to access paths and content within the
+    // source. It returns any discovered Packages and Relationships.
+    Catalog(context.Context, file.Resolver) ([]Package, []artifact.Relationship, error)
+}
+```
+
+Both methods must be implemented:
+
+- **`Name()`** — returns a unique, stable identifier (e.g. `"my-custom-cataloger"`). This name is used in selection, logging, and the SBOM descriptor.
+- **`Catalog(ctx, resolver)`** — performs the actual analysis. Use `resolver` to list files, match globs, and read content without needing direct filesystem access.
+
+## CatalogerReference
+
+A `CatalogerReference` wraps a `pkg.Cataloger` with metadata that controls how it participates in selection:
+
+```go
+type CatalogerReference struct {
+    Cataloger     pkg.Cataloger
+    AlwaysEnabled bool
+    Tags          []string
+}
+```
+
+- **`AlwaysEnabled`** — when `true`, the cataloger runs unconditionally regardless of any `CatalogerSelection` filters.
+- **`Tags`** — used to include or exclude the cataloger via tag-based selection (e.g. `"os"`, `"language"`, `"my-app"`).
+
+### Constructor functions
+
+```go
+// NewCatalogerReference creates a selectable cataloger reference with the given tags.
+func NewCatalogerReference(cataloger pkg.Cataloger, tags []string) CatalogerReference
+
+// NewAlwaysEnabledCatalogerReference creates a cataloger reference that always runs.
+func NewAlwaysEnabledCatalogerReference(cataloger pkg.Cataloger) CatalogerReference
+```
+
+## Registering catalogers
+
+### WithCatalogers
+
+```go
+func (c *CreateSBOMConfig) WithCatalogers(catalogerRefs ...pkgcataloging.CatalogerReference) *CreateSBOMConfig
+```
+
+Adds user-provided catalogers to the pipeline. Catalogers added this way receive the built-in `"package"` tag automatically. They run in addition to any built-in catalogers that are selected.
+
+### WithoutCatalogers
+
+```go
+func (c *CreateSBOMConfig) WithoutCatalogers() *CreateSBOMConfig
+```
+
+Removes all built-in catalogers. Combine with `WithCatalogers` to run *only* your own catalogers.
+
+### WithCatalogerSelection
+
+```go
+func (c *CreateSBOMConfig) WithCatalogerSelection(selection cataloging.SelectionRequest) *CreateSBOMConfig
+```
+
+Fine-grained control over which built-in catalogers are active. Use `cataloging.NewSelectionRequest()` to build the request:
+
+```go
+// Use only OS catalogers plus one specific language cataloger
+cfg.WithCatalogerSelection(
+    cataloging.NewSelectionRequest().
+        WithSubSelections("os").
+        WithAdditions("python-package-cataloger"),
+)
+
+// Replace the defaults with specific tags
+cfg.WithCatalogerSelection(
+    cataloging.NewSelectionRequest().
+        WithDefaults(pkgcataloging.InstalledTag, pkgcataloging.DirectoryTag),
+)
+```
+
+## Built-in selection tags
+
+Tags defined in `github.com/anchore/syft/syft/cataloging/pkgcataloging`:
+
+| Tag | Constant | Description |
+|---|---|---|
+| `"installed"` | `pkgcataloging.InstalledTag` | Packages confirmed to be installed |
+| `"declared"` | `pkgcataloging.DeclaredTag` | Packages described but not necessarily installed |
+| `"image"` | `pkgcataloging.ImageTag` | Catalogers for container image sources |
+| `"directory"` | `pkgcataloging.DirectoryTag` | Catalogers for directory/filesystem sources |
+| `"package"` | `pkgcataloging.PackageTag` | All package catalogers |
+| `"os"` | `pkgcataloging.OSTag` | OS package catalogers (rpm, dpkg, apk, …) |
+| `"language"` | `pkgcataloging.LanguageTag` | Language ecosystem catalogers (npm, pip, …) |
+
+## Example: always-enabled custom cataloger
+
+This pattern, from [`examples/create_custom_sbom/main.go`](https://github.com/anchore/syft/blob/main/examples/create_custom_sbom/main.go), shows how to inject a custom cataloger that runs on every invocation:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+
+    _ "modernc.org/sqlite"
+
+    "github.com/anchore/syft/syft"
+    "github.com/anchore/syft/syft/cataloging"
+    "github.com/anchore/syft/syft/cataloging/filecataloging"
+    "github.com/anchore/syft/syft/cataloging/pkgcataloging"
+    "github.com/anchore/syft/syft/file"
+    "github.com/anchore/syft/syft/sbom"
+    "github.com/anchore/syft/syft/source"
+)
+
+func getSBOM(src source.Source) sbom.SBOM {
+    cfg := syft.DefaultCreateSBOMConfig().
+        WithParallelism(5).
+        WithTool("my-tool", "v1.0").
+        WithFilesConfig(
+            filecataloging.DefaultConfig().
+                WithSelection(file.AllFilesSelection).
+                WithHashers(
+                    crypto.MD5,
+                    crypto.SHA1,
+                    crypto.SHA256,
+                ),
+        ).
+        WithCatalogerSelection(
+            cataloging.NewSelectionRequest().
+                WithSubSelections("os").
+                WithAdditions("python-package-cataloger"),
+        ).
+        WithRelationshipsConfig(
+            cataloging.RelationshipsConfig{
+                PackageFileOwnership:                          true,
+                PackageFileOwnershipOverlap:                   true,
+                ExcludeBinaryPackagesWithFileOwnershipOverlap: true,
+            },
+        ).
+        // Register a custom cataloger that always runs
+        WithCatalogers(
+            pkgcataloging.NewAlwaysEnabledCatalogerReference(
+                newMyCustomCataloger(),
+            ),
+        )
+
+    s, err := syft.CreateSBOM(context.Background(), src, cfg)
+    if err != nil {
+        panic(err)
+    }
+
+    return *s
+}
+```
+
+## Example: tag-based custom cataloger
+
+Use `NewCatalogerReference` when you want your cataloger to participate in tag-based selection (so callers can enable or disable it):
+
+```go
+cfg := syft.DefaultCreateSBOMConfig().
+    WithCatalogers(
+        pkgcataloging.NewCatalogerReference(
+            newMyCustomCataloger(),
+            []string{"my-app", pkgcataloging.LanguageTag},
+        ),
+    )
+```
+
+The cataloger above can now be removed by a caller using:
+
+```go
+cfg.WithCatalogerSelection(
+    cataloging.NewSelectionRequest().
+        WithRemovals("my-app"),
+)
+```
+
+## Example: only custom catalogers
+
+Strip all built-in catalogers and run only your own:
+
+```go
+cfg := syft.DefaultCreateSBOMConfig().
+    WithoutCatalogers().
+    WithCatalogers(
+        pkgcataloging.NewAlwaysEnabledCatalogerReference(newMyCustomCataloger()),
+    )
+```
+
+## Example: selecting catalogers by tag
+
+From [`examples/select_catalogers/main.go`](https://github.com/anchore/syft/blob/main/examples/select_catalogers/main.go):
+
+```go
+func getSBOM(src source.Source, defaultTags ...string) sbom.SBOM {
+    cfg := syft.DefaultCreateSBOMConfig().
+        WithCatalogerSelection(
+            cataloging.NewSelectionRequest().
+                WithDefaults(defaultTags...),
+        )
+
+    s, err := syft.CreateSBOM(context.Background(), src, cfg)
+    if err != nil {
+        panic(err)
+    }
+
+    return *s
+}
+
+// Use only installed + directory catalogers:
+sbom := getSBOM(src, pkgcataloging.InstalledTag, pkgcataloging.DirectoryTag)
+```
+
+<Note>
+  Custom catalogers added via `WithCatalogers` always receive the `"package"` tag in addition to any tags you provide. This ensures they are visible in the cataloger manifest recorded in `sbom.Descriptor.Configuration`.
+</Note>

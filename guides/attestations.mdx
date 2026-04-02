@@ -1,0 +1,176 @@
+---
+title: "Creating SBOM attestations"
+description: "Sign and publish SBOM attestations to an OCI registry using syft attest and cosign."
+---
+
+`syft attest` generates an SBOM and immediately attaches it to a container image in an OCI registry as a signed [in-toto attestation](https://github.com/in-toto/attestation/blob/main/spec/README.md). The attestation predicate is the SBOM itself; consumers can later verify both the image digest and its associated SBOM.
+
+<Note>
+`syft attest` requires the image to be **available directly from an OCI registry**. Local Docker daemon images, OCI archives, and directory sources are not supported.
+</Note>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install cosign">
+    Syft delegates signing to [cosign](https://github.com/sigstore/cosign). It must be on your `PATH`:
+
+    ```bash
+    # Check cosign is available
+    cosign version
+    ```
+
+    If cosign is not found, `syft attest` will exit with an error.
+  </Step>
+  <Step title="Push your image to a registry">
+    The image must already be present in the registry before attesting:
+
+    ```bash
+    docker push yourrepo/yourimage:tag
+    ```
+  </Step>
+  <Step title="Authenticate with the registry">
+    Syft uses the same registry auth as `syft scan`. Set credentials via environment variables or config file — see [Scanning container images](/guides/scanning-images#private-registry-authentication).
+  </Step>
+</Steps>
+
+## Command syntax
+
+```bash
+syft attest --output [FORMAT] <IMAGE>
+```
+
+The `<IMAGE>` argument must be a fully-qualified registry reference, e.g. `yourrepo/yourimage:tag`.
+
+### Supported output formats for attestations
+
+Only the following formats are accepted by `syft attest`:
+
+| Flag value | Predicate type (cosign) |
+|---|---|
+| `syft-json` *(default)* | `custom` |
+| `cyclonedx-json` | `cyclonedx` |
+| `spdx-json` | `spdxjson` |
+| `spdx-tag-value` | `spdx` |
+
+<Warning>
+The `template` format and multi-file outputs are not supported for attestations.
+</Warning>
+
+## Key-based signing
+
+Use a cosign-generated key pair to sign the attestation:
+
+<Steps>
+  <Step title="Generate a key pair">
+    ```bash
+    cosign generate-key-pair
+    ```
+
+    This creates `cosign.key` (private) and `cosign.pub` (public).
+  </Step>
+  <Step title="Attest with the private key">
+    ```bash
+    syft attest --key cosign.key -o cyclonedx-json yourrepo/yourimage:tag
+    ```
+
+    You will be prompted for the key password, or set it via the `COSIGN_PASSWORD` environment variable:
+
+    ```bash
+    COSIGN_PASSWORD=mysecret \
+      syft attest --key cosign.key -o cyclonedx-json yourrepo/yourimage:tag
+    ```
+  </Step>
+  <Step title="Verify the attestation">
+    ```bash
+    cosign verify-attestation \
+      --key cosign.pub \
+      --type cyclonedx \
+      yourrepo/yourimage:tag
+    ```
+  </Step>
+</Steps>
+
+## Keyless signing (OIDC / Sigstore)
+
+When `--key` is omitted, Syft uses cosign's keyless mode with Sigstore's Fulcio certificate authority and Rekor transparency log. This requires an OIDC token (available automatically in supported CI environments like GitHub Actions):
+
+```bash
+syft attest -o spdx-json yourrepo/yourimage:tag
+```
+
+<Tabs>
+  <Tab title="GitHub Actions">
+    Keyless signing works out of the box in GitHub Actions when the workflow has `id-token: write` permission:
+
+    ```yaml
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Attest SBOM
+        run: syft attest -o spdx-json yourrepo/yourimage:tag
+    ```
+  </Tab>
+  <Tab title="Local / interactive">
+    When running locally, cosign will open a browser window for OIDC authentication:
+
+    ```bash
+    syft attest -o spdx-json yourrepo/yourimage:tag
+    ```
+  </Tab>
+</Tabs>
+
+## Verifying an attestation
+
+After attesting, download and inspect the attestation with cosign:
+
+```bash
+# Download the attestation
+cosign download attestation yourrepo/yourimage:tag
+
+# Verify a keyless attestation (checks Rekor + Fulcio chain)
+cosign verify-attestation \
+  --type spdxjson \
+  yourrepo/yourimage:tag
+
+# Verify a key-based attestation
+cosign verify-attestation \
+  --key cosign.pub \
+  --type cyclonedx \
+  yourrepo/yourimage:tag
+```
+
+<Tip>
+After `syft attest` completes successfully, it prints the exact `cosign download attestation` command you can run to retrieve the result.
+</Tip>
+
+## Full example
+
+```bash
+# 1. Generate key pair
+cosign generate-key-pair
+
+# 2. Push image
+docker push myregistry.io/myapp:v1.0.0
+
+# 3. Create and sign SBOM attestation
+COSIGN_PASSWORD=secret \
+  syft attest \
+    --key cosign.key \
+    --output cyclonedx-json \
+    myregistry.io/myapp:v1.0.0
+
+# 4. Verify
+cosign verify-attestation \
+  --key cosign.pub \
+  --type cyclonedx \
+  myregistry.io/myapp:v1.0.0
+```

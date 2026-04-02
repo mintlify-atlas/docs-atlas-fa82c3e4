@@ -1,0 +1,169 @@
+---
+title: "Go library overview"
+description: "Use Syft as a Go library to generate SBOMs programmatically in your own applications."
+---
+
+Syft can be used as a Go library to generate SBOMs from within your own applications. The library provides the same cataloging capabilities as the CLI, exposed through a small, composable API.
+
+## Module path
+
+```
+github.com/anchore/syft
+```
+
+Add it to your project:
+
+```bash
+go get github.com/anchore/syft
+```
+
+<Note>
+  Some catalogers (e.g. RPM database) require a CGo-free SQLite driver. Import the side-effect package in your `main` to enable it:
+
+  ```go
+  import _ "modernc.org/sqlite"
+  ```
+</Note>
+
+## Core functions
+
+The library surface is intentionally narrow. Three functions cover the entire SBOM generation workflow:
+
+| Function | Package | Description |
+|---|---|---|
+| `GetSource` | `github.com/anchore/syft/syft` | Resolves a user input string to a `source.Source` |
+| `CreateSBOM` | `github.com/anchore/syft/syft` | Catalogs a source and returns an `*sbom.SBOM` |
+| `format.Encode` | `github.com/anchore/syft/syft/format` | Serializes an `sbom.SBOM` to bytes in a chosen format |
+
+### Signatures
+
+```go
+func GetSource(ctx context.Context, userInput string, cfg *GetSourceConfig) (source.Source, error)
+
+func CreateSBOM(ctx context.Context, src source.Source, cfg *CreateSBOMConfig) (*sbom.SBOM, error)
+
+func Encode(s sbom.SBOM, f sbom.FormatEncoder) ([]byte, error)
+```
+
+## Complete example
+
+The following is the working example from [`examples/create_simple_sbom/main.go`](https://github.com/anchore/syft/blob/main/examples/create_simple_sbom/main.go):
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	_ "modernc.org/sqlite" // required for rpmdb and other features
+
+	"github.com/anchore/syft/syft"
+	"github.com/anchore/syft/syft/format"
+	"github.com/anchore/syft/syft/format/syftjson"
+	"github.com/anchore/syft/syft/sbom"
+	"github.com/anchore/syft/syft/source"
+)
+
+const defaultImage = "alpine:3.19"
+
+func main() {
+	// automagically get a source.Source for arbitrary string input
+	src := getSource(imageReference())
+	defer src.Close()
+
+	// catalog the given source and return a SBOM
+	sbom := getSBOM(src)
+
+	// take the SBOM object and encode it into the syft-json representation
+	bytes := formatSBOM(sbom)
+
+	// show the SBOM!
+	fmt.Println(string(bytes))
+}
+
+func imageReference() string {
+	// read an image string reference from the command line or use a default
+	if len(os.Args) > 1 {
+		return os.Args[1]
+	}
+	return defaultImage
+}
+
+func getSource(input string) source.Source {
+	src, err := syft.GetSource(context.Background(), input, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	return src
+}
+
+func getSBOM(src source.Source) sbom.SBOM {
+	s, err := syft.CreateSBOM(context.Background(), src, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	return *s
+}
+
+func formatSBOM(s sbom.SBOM) []byte {
+	bytes, err := format.Encode(s, syftjson.NewFormatEncoder())
+	if err != nil {
+		panic(err)
+	}
+	return bytes
+}
+```
+
+## Library integration hooks
+
+Two functions allow you to wire Syft into your application's observability infrastructure. Both are defined in `github.com/anchore/syft/syft`.
+
+### SetLogger
+
+```go
+func SetLogger(logger logger.Logger)
+```
+
+Sets the logger used for all Syft log output. Accepts any implementation of `github.com/anchore/go-logger.Logger`.
+
+### SetBus
+
+```go
+func SetBus(b *partybus.Bus)
+```
+
+Sets the event bus onto which Syft publishes progress and lifecycle events. Events are published by the library but in-library subscriptions are not allowed — your application controls all subscribers.
+
+```go
+import (
+    "github.com/wagoodman/go-partybus"
+    "github.com/anchore/syft/syft"
+)
+
+bus := partybus.NewBus()
+syft.SetBus(bus)
+
+subscription := bus.Subscribe()
+// consume events from subscription in a goroutine
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Getting a source" href="./getting-source">
+    Resolve container images, directories, and archives into a `source.Source`.
+  </Card>
+  <Card title="Creating an SBOM" href="./creating-sboms">
+    Configure and run the cataloging pipeline to produce an `sbom.SBOM`.
+  </Card>
+  <Card title="Custom catalogers" href="./custom-catalogers">
+    Implement the `pkg.Cataloger` interface and register it with your config.
+  </Card>
+  <Card title="Encoding and decoding" href="./encoding-decoding">
+    Serialize SBOMs to standard formats and decode existing SBOM files.
+  </Card>
+</CardGroup>

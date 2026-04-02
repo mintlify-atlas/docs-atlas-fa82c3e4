@@ -1,0 +1,223 @@
+---
+title: "Creating an SBOM"
+description: "Catalog a source and produce a structured SBOM using the Syft library."
+---
+
+`syft.CreateSBOM` runs the cataloging pipeline against a `source.Source` and returns a populated `*sbom.SBOM`.
+
+## Function signature
+
+```go
+func CreateSBOM(ctx context.Context, src source.Source, cfg *CreateSBOMConfig) (*sbom.SBOM, error)
+```
+
+Pass `nil` for `cfg` to use `DefaultCreateSBOMConfig()`. Syft automatically selects the appropriate catalogers for the source type (container image vs. directory) when no explicit selection is made.
+
+## CreateSBOMConfig
+
+```go
+type CreateSBOMConfig struct {
+    Compliance         cataloging.ComplianceConfig
+    Search             cataloging.SearchConfig
+    Relationships      cataloging.RelationshipsConfig
+    Unknowns           cataloging.UnknownsConfig
+    DataGeneration     cataloging.DataGenerationConfig
+    Packages           pkgcataloging.Config
+    Licenses           cataloging.LicenseConfig
+    Files              filecataloging.Config
+    Parallelism        int
+    CatalogerSelection cataloging.SelectionRequest
+
+    ToolName          string
+    ToolVersion       string
+    ToolConfiguration interface{}
+}
+```
+
+### DefaultCreateSBOMConfig
+
+```go
+func DefaultCreateSBOMConfig() *CreateSBOMConfig
+```
+
+Returns a `*CreateSBOMConfig` with all fields set to production-ready defaults. The `ToolName` and `ToolVersion` fields are pre-populated with `"syft"` and the version of the Syft module in the calling binary's build info.
+
+### Builder methods
+
+All `With*` methods return `*CreateSBOMConfig` for chaining.
+
+<Tabs>
+  <Tab title="Tool metadata">
+    ```go
+    // WithTool sets the tool name, version, and optional extra configuration
+    // that will appear in the SBOM descriptor.
+    func (c *CreateSBOMConfig) WithTool(name, version string, cfg ...any) *CreateSBOMConfig
+    ```
+
+    ```go
+    cfg := syft.DefaultCreateSBOMConfig().
+        WithTool("my-scanner", "v2.1.0", myExtraConfig)
+    ```
+  </Tab>
+  <Tab title="Parallelism">
+    ```go
+    // WithParallelism sets the maximum number of concurrent cataloging tasks.
+    // 0 = auto (NumCPU * 4), 1 = serial, negative = unbounded.
+    func (c *CreateSBOMConfig) WithParallelism(p int) *CreateSBOMConfig
+    ```
+
+    ```go
+    cfg := syft.DefaultCreateSBOMConfig().
+        WithParallelism(5)
+    ```
+  </Tab>
+  <Tab title="Search scope">
+    ```go
+    // WithSearchConfig controls what is searched (e.g. squashed vs all layers).
+    func (c *CreateSBOMConfig) WithSearchConfig(cfg cataloging.SearchConfig) *CreateSBOMConfig
+    ```
+  </Tab>
+  <Tab title="Relationships">
+    ```go
+    // WithRelationshipsConfig defines which relationships are captured.
+    func (c *CreateSBOMConfig) WithRelationshipsConfig(cfg cataloging.RelationshipsConfig) *CreateSBOMConfig
+    ```
+
+    ```go
+    cfg := syft.DefaultCreateSBOMConfig().
+        WithRelationshipsConfig(cataloging.RelationshipsConfig{
+            PackageFileOwnership:                          true,
+            PackageFileOwnershipOverlap:                   true,
+            ExcludeBinaryPackagesWithFileOwnershipOverlap: true,
+        })
+    ```
+  </Tab>
+  <Tab title="Files">
+    ```go
+    // WithFilesConfig controls file-based cataloging (selection and hash algorithms).
+    func (c *CreateSBOMConfig) WithFilesConfig(cfg filecataloging.Config) *CreateSBOMConfig
+
+    // WithoutFiles disables file cataloging entirely.
+    func (c *CreateSBOMConfig) WithoutFiles() *CreateSBOMConfig
+    ```
+
+    ```go
+    import "crypto"
+
+    cfg := syft.DefaultCreateSBOMConfig().
+        WithFilesConfig(
+            filecataloging.DefaultConfig().
+                WithSelection(file.AllFilesSelection).
+                WithHashers(crypto.MD5, crypto.SHA1, crypto.SHA256),
+        )
+    ```
+  </Tab>
+</Tabs>
+
+#### All available builder methods
+
+| Method | Description |
+|---|---|
+| `WithTool(name, version string, cfg ...any)` | Set SBOM descriptor tool name, version, and extra config |
+| `WithParallelism(p int)` | Control concurrent cataloger execution |
+| `WithComplianceConfig(cfg cataloging.ComplianceConfig)` | Configure compliance-related behavior |
+| `WithSearchConfig(cfg cataloging.SearchConfig)` | Configure what paths/layers are searched |
+| `WithRelationshipsConfig(cfg cataloging.RelationshipsConfig)` | Control relationship generation |
+| `WithUnknownsConfig(cfg cataloging.UnknownsConfig)` | Configure how unknowns are labeled |
+| `WithDataGenerationConfig(cfg cataloging.DataGenerationConfig)` | Control generated data (e.g. CPEs) |
+| `WithPackagesConfig(cfg pkgcataloging.Config)` | Tune package-specific cataloging behavior |
+| `WithLicenseConfig(cfg cataloging.LicenseConfig)` | Configure license scanning |
+| `WithFilesConfig(cfg filecataloging.Config)` | Configure file cataloging and digests |
+| `WithoutFiles()` | Disable file cataloging entirely |
+| `WithCatalogerSelection(selection cataloging.SelectionRequest)` | Add, remove, or sub-select catalogers by name or tag |
+| `WithCatalogers(refs ...pkgcataloging.CatalogerReference)` | Inject custom catalogers |
+| `WithoutCatalogers()` | Remove all built-in catalogers |
+
+### Calling Create on the config directly
+
+`CreateSBOMConfig` also exposes a `Create` convenience method so you can hold onto a pre-configured object and call it multiple times:
+
+```go
+func (c *CreateSBOMConfig) Create(ctx context.Context, src source.Source) (*sbom.SBOM, error)
+```
+
+## The sbom.SBOM struct
+
+`CreateSBOM` returns a pointer to `sbom.SBOM`:
+
+```go
+type SBOM struct {
+    Artifacts     Artifacts
+    Relationships []artifact.Relationship
+    Source        source.Description
+    Descriptor    Descriptor
+}
+
+type Artifacts struct {
+    Packages          *pkg.Collection
+    FileMetadata      map[file.Coordinates]file.Metadata
+    FileDigests       map[file.Coordinates][]file.Digest
+    FileContents      map[file.Coordinates]string
+    FileLicenses      map[file.Coordinates][]file.License
+    Executables       map[file.Coordinates]file.Executable
+    Unknowns          map[file.Coordinates][]string
+    LinuxDistribution *linux.Release
+}
+
+type Descriptor struct {
+    Name          string
+    Version       string
+    Configuration interface{}
+}
+```
+
+Key fields:
+
+- **`Artifacts.Packages`** — a `*pkg.Collection` with methods like `Sorted()`, `PackageCount()`, and `PackagesByName(name)`.
+- **`Artifacts.LinuxDistribution`** — populated for container image sources; nil otherwise.
+- **`Relationships`** — edges between packages, files, and the source.
+- **`Source`** — describes what was scanned (image reference, directory path, etc.).
+- **`Descriptor`** — records the tool name/version and cataloging configuration used.
+
+## Examples
+
+<CodeGroup>
+
+```go Simple (nil config)
+s, err := syft.CreateSBOM(context.Background(), src, nil)
+if err != nil {
+    return err
+}
+
+fmt.Printf("found %d packages\n", s.Artifacts.Packages.PackageCount())
+for _, p := range s.Artifacts.Packages.Sorted() {
+    fmt.Printf(" - %s@%s (%s)\n", p.Name, p.Version, p.Type)
+}
+```
+
+```go Custom config
+cfg := syft.DefaultCreateSBOMConfig().
+    WithParallelism(5).
+    WithTool("my-tool", "v1.0").
+    WithFilesConfig(
+        filecataloging.DefaultConfig().
+            WithSelection(file.AllFilesSelection).
+            WithHashers(crypto.MD5, crypto.SHA1, crypto.SHA256),
+    ).
+    WithRelationshipsConfig(cataloging.RelationshipsConfig{
+        PackageFileOwnership:                          true,
+        PackageFileOwnershipOverlap:                   true,
+        ExcludeBinaryPackagesWithFileOwnershipOverlap: true,
+    })
+
+s, err := syft.CreateSBOM(context.Background(), src, cfg)
+if err != nil {
+    return err
+}
+```
+
+</CodeGroup>
+
+<Note>
+  The cataloging pipeline runs concurrently by default. Tasks within a group run in parallel; groups are executed serially to respect ordering dependencies (e.g. environment detection must complete before package cataloging).
+</Note>

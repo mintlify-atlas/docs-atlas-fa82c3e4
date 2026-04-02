@@ -1,0 +1,115 @@
+---
+title: "Scanning filesystems and archives"
+description: "Generate SBOMs from local directories, files, and archive formats such as tar and zip."
+---
+
+Syft can catalog packages from local filesystem paths — including project directories, individual files, and many archive formats. No container runtime is required.
+
+## Scanning a directory
+
+Pass a path directly to `syft scan` (or the bare `syft` command, which defaults to `scan`):
+
+```bash
+# Scan the current directory
+syft .
+
+# Scan a specific project directory
+syft ./my-project
+
+# Scan using the explicit dir: scheme
+syft dir:path/to/yourproject
+```
+
+<Note>
+When scanning a directory, Syft catalogs all packages it can discover — installed system packages, dependency manifests (package.json, go.mod, requirements.txt, etc.), and binary signatures.
+</Note>
+
+## Scanning a single file
+
+Use the `file:` scheme to target a single file:
+
+```bash
+syft file:path/to/yourproject/somefile
+```
+
+This is useful for auditing individual binaries or dependency lock-files.
+
+## Scanning archive files
+
+Syft can read Docker tarballs, OCI archives, and other container image formats from disk without a running container runtime:
+
+<CodeGroup>
+```bash Docker archive
+# Archive created with "docker save"
+syft docker-archive:path/to/yourimage.tar
+```
+
+```bash OCI archive
+# OCI-layout tarball (e.g. from skopeo copy --format oci)
+syft oci-archive:path/to/yourimage.tar
+```
+
+```bash OCI directory
+# Unpacked OCI layout directory
+syft oci-dir:path/to/yourimage
+```
+
+```bash Singularity SIF
+# Singularity Image Format
+syft singularity:path/to/yourimage.sif
+```
+</CodeGroup>
+
+## Scan scope for directories
+
+The `--scope` flag controls how deeply Syft traverses an image's layers. For plain directory scans the flag is accepted but only `squashed` (the default) is meaningful — there are no image layers to traverse.
+
+```bash
+syft ./my-project --scope squashed
+```
+
+| Scope | Flag value | Notes for directory scans |
+|---|---|---|
+| Squashed *(default)* | `squashed` | Catalogs all visible files in the directory tree. |
+| All layers | `all-layers` | Equivalent to squashed for directories. |
+| Deep squashed | `deep-squashed` | Equivalent to squashed for directories. |
+
+## Excluding paths
+
+Use `--exclude` with a glob expression to skip paths during scanning. The flag can be specified multiple times:
+
+```bash
+# Exclude test directories and vendored code
+syft ./my-project --exclude './vendor/**' --exclude './**/*_test.go'
+```
+
+## Setting a base path
+
+Use `--base-path` to anchor all reported file paths to a specific root. Symlinks above this directory will not be followed:
+
+```bash
+syft ./my-project --base-path /opt/app
+```
+
+## Output examples
+
+```bash
+# Table summary to stdout (default)
+syft ./my-project
+
+# Syft JSON to stdout
+syft ./my-project -o json
+
+# SPDX JSON to a file
+syft ./my-project -o spdx-json=./sbom.spdx.json
+
+# CycloneDX XML to a file
+syft ./my-project -o cyclonedx-xml=./sbom.cdx.xml
+
+# Multiple outputs at once
+syft ./my-project \
+  -o syft-json=./sbom.syft.json \
+  -o cyclonedx-json=./sbom.cdx.json
+```
+
+See the [Output formats](/guides/output-formats) guide for all available format names and version options.

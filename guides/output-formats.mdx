@@ -1,0 +1,168 @@
+---
+title: "Output formats"
+description: "All SBOM output formats supported by Syft, how to select them, pin versions, and write to files."
+---
+
+Syft supports a wide range of SBOM output formats. Use the `-o` / `--output` flag to choose one or more formats. By default Syft prints a human-readable `table` to stdout.
+
+## Specifying a format
+
+```bash
+syft <source> -o <format>
+```
+
+For example:
+
+```bash
+syft alpine:latest -o cyclonedx-json
+```
+
+## All supported formats
+
+<CardGroup cols={2}>
+  <Card title="syft-json" icon="brackets-curly">
+    Syft's native JSON schema. Contains the richest set of metadata and is the recommended format for further processing with Syft-aware tools.
+  </Card>
+  <Card title="cyclonedx-json" icon="recycle">
+    CycloneDX BOM in JSON format. Supports versions 1.2–1.6. Default version: **1.6**.
+  </Card>
+  <Card title="cyclonedx-xml" icon="code">
+    CycloneDX BOM in XML format. Supports versions 1.0–1.6. Default version: **1.6**.
+  </Card>
+  <Card title="spdx-json" icon="brackets-curly">
+    SPDX Software Bill of Materials in JSON format. Supports versions 2.2–2.3. Default version: **2.3**.
+  </Card>
+  <Card title="spdx-tag-value" icon="tag">
+    SPDX Software Bill of Materials in Tag-Value (TV) text format. Supports versions 2.1–2.3. Default version: **2.3**.
+  </Card>
+  <Card title="table" icon="table">
+    Human-readable columnar summary of discovered packages. This is the **default** when no `-o` flag is given.
+  </Card>
+  <Card title="text" icon="align-left">
+    A plain-text list of packages, one per line.
+  </Card>
+  <Card title="template" icon="file-code">
+    Renders output using a Go `text/template` file you provide with `-t`.
+  </Card>
+  <Card title="github" icon="github">
+    GitHub's dependency snapshot format for the Dependency Submission API.
+  </Card>
+  <Card title="purls" icon="link">
+    A plain list of Package URLs (PURLs), one per line.
+  </Card>
+</CardGroup>
+
+## Format examples
+
+<CodeGroup>
+```bash Syft JSON
+syft alpine:latest -o json
+# or equivalently:
+syft alpine:latest -o syft-json
+```
+
+```bash CycloneDX JSON
+syft alpine:latest -o cyclonedx-json
+```
+
+```bash CycloneDX XML
+syft alpine:latest -o cyclonedx-xml
+```
+
+```bash SPDX JSON
+syft alpine:latest -o spdx-json
+```
+
+```bash SPDX Tag-Value
+syft alpine:latest -o spdx
+# or equivalently:
+syft alpine:latest -o spdx-tag-value
+```
+
+```bash Table (default)
+syft alpine:latest
+# or explicitly:
+syft alpine:latest -o table
+```
+
+```bash Text
+syft alpine:latest -o text
+```
+
+```bash Template
+syft alpine:latest -o template -t my_format.tmpl
+```
+</CodeGroup>
+
+## Pinning a format version
+
+Append `@<version>` to the format name to request a specific spec version:
+
+```bash
+# SPDX 2.2 Tag-Value
+syft alpine:latest -o spdx@2.2
+
+# SPDX 2.2 JSON
+syft alpine:latest -o spdx-json@2.2
+
+# CycloneDX 1.4 JSON
+syft alpine:latest -o cyclonedx-json@1.4
+
+# CycloneDX 1.5 XML
+syft alpine:latest -o cyclonedx-xml@1.5
+```
+
+### Supported versions
+
+| Format | Supported versions | Default |
+|---|---|---|
+| `cyclonedx-json` | 1.2, 1.3, 1.4, 1.5, 1.6 | 1.6 |
+| `cyclonedx-xml` | 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6 | 1.6 |
+| `spdx-json` | 2.2, 2.3 | 2.3 |
+| `spdx-tag-value` | 2.1, 2.2, 2.3 | 2.3 |
+
+## Writing output to a file
+
+Append `=<filepath>` to the format name to write directly to a file:
+
+```bash
+# CycloneDX JSON to a file
+syft alpine:latest -o cyclonedx-json=./sbom.cdx.json
+
+# SPDX JSON to a file
+syft alpine:latest -o spdx-json=./sbom.spdx.json
+```
+
+## Multiple outputs at once
+
+Pass `-o` multiple times to write several formats simultaneously. Each can go to a different file, or one can go to stdout (no `=<file>` suffix):
+
+```bash
+# Two files
+syft alpine:latest \
+  -o spdx-json=./sbom.spdx.json \
+  -o cyclonedx-json=./sbom.cdx.json
+
+# One file + stdout
+syft alpine:latest \
+  -o cyclonedx-json=./sbom.cdx.json \
+  -o table
+```
+
+<Tip>
+When combining multiple `-o` flags, only the last output without a file path goes to stdout. All others must have a `=<file>` destination.
+</Tip>
+
+## Template format
+
+The `template` format renders the SBOM using a Go `text/template` file. Pass the template path with `-t`:
+
+```bash
+syft alpine:latest -o template -t my_format.tmpl
+```
+
+The template receives the full Syft SBOM object, including all packages, relationships, and source metadata.
+
+<Warning>
+The template format is not available for `syft attest`. Only `syft-json`, `cyclonedx-json`, `spdx-json`, and `spdx-tag-value` are supported for attestations.
+</Warning>

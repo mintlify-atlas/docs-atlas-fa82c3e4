@@ -1,0 +1,167 @@
+---
+title: "File cataloging"
+description: "Configure how Syft catalogs files alongside packages."
+---
+
+In addition to packages, Syft can collect metadata about individual files — their paths, digests, content snippets, and executable properties. File cataloging is controlled by three sub-sections: `file.metadata`, `file.content`, and `file.executable`.
+
+## File selection modes
+
+The `file.metadata.selection` key controls which files are included in the SBOM's file list:
+
+| Value | Description |
+|---|---|
+| `owned-by-package` *(default)* | Only files that are owned by a cataloged package. |
+| `all` | Every file in the scan target. |
+| `none` | No file metadata is collected. |
+
+<Note>
+`owned-by-package` is the default because it keeps SBOM size manageable while still capturing the files most relevant to package provenance. Use `all` when you need a complete file inventory.
+</Note>
+
+### Setting file selection
+
+<Tabs>
+  <Tab title="CLI flag">
+    There is no dedicated CLI flag for `file.metadata.selection`. Set it via an environment variable or config file:
+
+    ```bash
+    # Via environment variable
+    export SYFT_FILE_METADATA_SELECTION=all
+    syft alpine:latest
+    ```
+  </Tab>
+  <Tab title="Config file">
+    ```yaml
+    # .syft.yaml
+    file:
+      metadata:
+        selection: all   # none | owned-by-package | all
+    ```
+  </Tab>
+</Tabs>
+
+## Digest algorithms
+
+Syft computes digests for each cataloged file. The default algorithms are `sha1` and `sha256`.
+
+Supported values: `md5`, `sha1`, `sha224`, `sha256`, `sha384`, `sha512`.
+
+<CodeGroup>
+
+```yaml config file
+# .syft.yaml
+file:
+  metadata:
+    digests:
+      - sha256
+      - sha512
+```
+
+```bash environment variable
+export SYFT_FILE_METADATA_DIGESTS="sha256,sha512"
+syft alpine:latest
+```
+
+</CodeGroup>
+
+## File content cataloging
+
+The `file.content` section controls extraction of raw file content into the SBOM. This is disabled by default (no globs configured). When enabled, Syft reads matching files and stores their content as base64-encoded strings.
+
+| Key | Default | Description |
+|---|---|---|
+| `file.content.globs` | `[]` | Glob patterns that select files for content extraction. |
+| `file.content.skip-files-above-size` | `256000` (250 KB) | Files larger than this number of bytes are skipped. |
+
+```yaml
+# .syft.yaml
+file:
+  content:
+    globs:
+      - "**/go.sum"
+      - "**/package-lock.json"
+    skip-files-above-size: 512000   # 500 KB
+```
+
+<Warning>
+Including large or numerous files with `file.content.globs` can significantly increase SBOM size. Use `skip-files-above-size` to guard against unexpectedly large files.
+</Warning>
+
+## Executable cataloging
+
+The `file.executable` section controls which files are analyzed as executables. By default, Syft matches all files whose MIME type indicates they are executables (ELF, PE, Mach-O). You can narrow the match using glob patterns.
+
+| Key | Default | Description |
+|---|---|---|
+| `file.executable.globs` | `[]` | When non-empty, only files matching these globs are analyzed as executables — in addition to MIME-type matching. |
+
+```yaml
+# .syft.yaml
+file:
+  executable:
+    globs:
+      - "**/bin/*"
+      - "**/sbin/*"
+```
+
+## Full config example
+
+The following shows all file-cataloging keys together:
+
+```yaml
+# .syft.yaml
+file:
+  metadata:
+    selection: owned-by-package   # none | owned-by-package | all
+    digests:
+      - sha1
+      - sha256
+
+  content:
+    globs: []                     # e.g. ["**/go.sum", "**/Gemfile.lock"]
+    skip-files-above-size: 256000 # bytes (default: 250 KB)
+
+  executable:
+    globs: []                     # leave empty to match all MIME-detected executables
+```
+
+## Disabling file cataloging
+
+To turn off all file cataloging and produce the smallest possible SBOM:
+
+<CodeGroup>
+
+```yaml config file
+# .syft.yaml
+file:
+  metadata:
+    selection: none
+    digests: []
+  content:
+    globs: []
+  executable:
+    globs: []
+```
+
+```bash environment variable
+export SYFT_FILE_METADATA_SELECTION=none
+syft alpine:latest
+```
+
+</CodeGroup>
+
+<Tip>
+Disabling file cataloging is useful when generating SBOMs in size-constrained environments or when downstream tooling only processes package data.
+</Tip>
+
+## Related topics
+
+<CardGroup cols={2}>
+  <Card title="Configuration overview" href="/configuration/overview" icon="sliders">
+    Config file locations, environment variables, and priority order.
+  </Card>
+  <Card title="Catalogers" href="/configuration/catalogers" icon="package">
+    Control which package and file catalogers run during a scan.
+  </Card>
+</CardGroup>

@@ -1,0 +1,140 @@
+---
+title: "Catalogers"
+description: "Understand and customize which package catalogers Syft uses during scanning."
+---
+
+A cataloger is a plugin-style component that knows how to find and extract package information from a specific ecosystem or file format. For example, there are catalogers for Alpine APK databases, Go binaries, Python `site-packages`, npm `node_modules`, and many more.
+
+Syft selects a default set of catalogers automatically based on what you are scanning. You can override, extend, or restrict that set using flags or config file keys.
+
+## Cataloger tags
+
+Every cataloger is tagged with one or more labels that describe when and how it applies. The built-in tags are:
+
+| Tag | Description |
+|---|---|
+| `image` | Catalogers that are appropriate for container images. |
+| `directory` | Catalogers that are appropriate for directory or filesystem scans. |
+| `installed` | Catalogers that detect positively-installed packages (e.g. OS package databases). |
+| `declared` | Catalogers that read package manifests describing dependencies (e.g. `package.json`, `go.mod`). |
+| `package` | All catalogers that produce package results. |
+| `os` | Catalogers that find OS-level packages (RPM, DEB, APK, etc.). |
+| `language` | Catalogers that find language-ecosystem packages (Go, Python, Java, etc.). |
+| `file` | Catalogers that primarily discover information about files rather than packages. |
+| `deprecated` | Catalogers that are no longer recommended and may be removed in a future version. |
+
+## Default cataloger selection
+
+When you run `syft` without specifying catalogers, Syft picks the default set based on the source type:
+
+| Source type | Default tags used |
+|---|---|
+| Container image (Docker, OCI, registry) | `image`, `file` |
+| Directory or filesystem path | `directory`, `file` |
+| Snap package | `installed`, `file` |
+
+## Listing available catalogers
+
+Use the `cataloger list` subcommand to see every cataloger Syft knows about, along with their tags:
+
+```bash
+syft cataloger list
+```
+
+Filter the list to see only catalogers active for a specific source type:
+
+```bash
+# Show catalogers active for image scans
+syft cataloger list --scope image
+
+# Show catalogers active for directory scans
+syft cataloger list --scope directory
+```
+
+## Selecting catalogers
+
+### Via CLI flags
+
+<Steps>
+  <Step title="Override the default set">
+    Replace the default catalogers entirely with a named set. Accepts cataloger names or tag names:
+
+    ```bash
+    # Use only OS-level catalogers
+    syft alpine:latest --override-default-catalogers os
+
+    # Use only Go and Python catalogers
+    syft ./my-project --override-default-catalogers go-module-binary-cataloger,python-package-cataloger
+    ```
+  </Step>
+  <Step title="Add or remove from the default set">
+    Use `--select-catalogers` with `+` (add) and `-` (remove) expressions. Without a prefix, an expression acts as a sub-select filter:
+
+    ```bash
+    # Add the Java cataloger on top of the defaults
+    syft alpine:latest --select-catalogers +java-archive-cataloger
+
+    # Remove the binary cataloger from the defaults
+    syft ./my-project --select-catalogers -binary-cataloger
+
+    # Restrict defaults to only OS catalogers, then add the Go cataloger
+    syft alpine:latest --select-catalogers os,+go-module-binary-cataloger
+    ```
+  </Step>
+</Steps>
+
+### Via config file
+
+```yaml
+# .syft.yaml
+
+# Replace the default tag set entirely
+default-catalogers:
+  - os
+  - language
+
+# Add, remove, or filter on top of the defaults
+select-catalogers:
+  - +java-archive-cataloger   # always include this cataloger
+  - -binary-cataloger          # always exclude this cataloger
+```
+
+<Tip>
+Use `syft cataloger list` after adjusting your selection to verify the final set of catalogers that will run.
+</Tip>
+
+## Default behavior by source type
+
+<Tabs>
+  <Tab title="Container image">
+    When scanning a container image, Syft defaults to the `image` tag. This includes catalogers for OS package databases (APK, DEB, RPM, etc.) and language ecosystem packages found installed in the image.
+
+    ```bash
+    syft alpine:latest
+    # Runs image-tagged catalogers by default
+    ```
+  </Tab>
+  <Tab title="Directory">
+    When scanning a directory, Syft defaults to the `directory` tag. This includes catalogers that read dependency manifests and lock files (e.g. `go.mod`, `package-lock.json`, `requirements.txt`).
+
+    ```bash
+    syft ./my-project
+    # Runs directory-tagged catalogers by default
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+The `--catalogers` flag is deprecated. Use `--override-default-catalogers` and `--select-catalogers` instead.
+</Note>
+
+## Related topics
+
+<CardGroup cols={2}>
+  <Card title="Configuration overview" href="/configuration/overview" icon="sliders">
+    Config file locations, environment variables, and priority order.
+  </Card>
+  <Card title="Scan scopes" href="/configuration/scopes" icon="layers">
+    Control which image layers are included in the catalog.
+  </Card>
+</CardGroup>

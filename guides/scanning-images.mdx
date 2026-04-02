@@ -1,0 +1,210 @@
+---
+title: "Scanning container images"
+description: "Generate SBOMs from Docker images, OCI images, image archives, and remote registries."
+---
+
+Syft can generate an SBOM from any container image — whether it lives in a local Docker daemon, a remote registry, or an on-disk archive. The default behavior automatically detects the best available source, but you can always be explicit with a scheme prefix.
+
+## Basic usage
+
+```bash
+# Scan an image from Docker (falls back to registry if Docker is unavailable)
+syft alpine:latest
+
+# Scan a specific tag from Docker Hub
+syft nginx:1.25
+```
+
+By default this prints a human-readable package table to stdout. To produce a machine-readable SBOM, add `-o` with a format name (see [Output formats](/guides/output-formats)).
+
+## Image source schemes
+
+Syft supports multiple image sources. You can let Syft auto-detect the right source, or explicitly specify a scheme prefix.
+
+<Tabs>
+  <Tab title="Auto-detect">
+    When no scheme is given Syft tries a Docker daemon first, then falls back to a direct registry pull:
+
+    ```bash
+    syft yourrepo/yourimage:tag
+    ```
+  </Tab>
+  <Tab title="Docker daemon">
+    Explicitly use the local Docker daemon:
+
+    ```bash
+    syft docker:yourrepo/yourimage:tag
+    ```
+  </Tab>
+  <Tab title="Podman daemon">
+    Explicitly use the local Podman daemon:
+
+    ```bash
+    syft podman:yourrepo/yourimage:tag
+    ```
+  </Tab>
+  <Tab title="Registry (no daemon)">
+    Pull directly from a registry without a container runtime:
+
+    ```bash
+    syft registry:yourrepo/yourimage:tag
+    ```
+  </Tab>
+  <Tab title="Docker archive">
+    Read from a tarball created by `docker save`:
+
+    ```bash
+    syft docker-archive:path/to/yourimage.tar
+    ```
+  </Tab>
+  <Tab title="OCI archive">
+    Read from an OCI-layout tarball (e.g. produced by Skopeo):
+
+    ```bash
+    syft oci-archive:path/to/yourimage.tar
+    ```
+  </Tab>
+  <Tab title="OCI directory">
+    Read from an OCI layout directory on disk:
+
+    ```bash
+    syft oci-dir:path/to/yourimage
+    ```
+  </Tab>
+  <Tab title="Singularity (SIF)">
+    Read from a Singularity Image Format container:
+
+    ```bash
+    syft singularity:path/to/yourimage.sif
+    ```
+  </Tab>
+  <Tab title="OCI model registry">
+    Scan an OCI model artifact (e.g. AI/ML models hosted on Docker Hub AI Models or compatible registries):
+
+    ```bash
+    syft oci-model-registry:ai/llama3.2
+    ```
+  </Tab>
+</Tabs>
+
+## Selecting a scan scope
+
+For container images, Syft can catalog content from different layer perspectives. Use the `-s` / `--scope` flag:
+
+| Scope | Flag value | Description |
+|---|---|---|
+| Squashed *(default)* | `squashed` | Only content visible in the final squashed filesystem (what the running container sees). |
+| All layers | `all-layers` | Content from every layer, including files deleted in later layers. |
+| Deep squashed | `deep-squashed` | Walks all layers but only includes content visible in the squashed view. Catches packages installed and then partially modified across layers. |
+
+```bash
+# Default (squashed)
+syft alpine:latest
+
+# All layers — useful for forensic analysis
+syft alpine:latest --scope all-layers
+
+# Deep squashed — catches cross-layer package mutations
+syft alpine:latest --scope deep-squashed
+```
+
+<Note>
+`all-layers` can produce duplicate entries for packages that were modified or overwritten across layers. Use `squashed` or `deep-squashed` for the most accurate runtime package list.
+</Note>
+
+## Selecting a platform
+
+For multi-platform images, specify the platform with `--platform`:
+
+```bash
+syft --platform linux/arm64 yourrepo/yourimage:tag
+```
+
+## Private registry authentication
+
+<Steps>
+  <Step title="Via environment variables">
+    Set credentials before running Syft. These take precedence over any config-file credentials:
+
+    ```bash
+    export SYFT_REGISTRY_AUTH_AUTHORITY=registry.example.com
+    export SYFT_REGISTRY_AUTH_USERNAME=myuser
+    export SYFT_REGISTRY_AUTH_PASSWORD=mypassword
+
+    syft registry:registry.example.com/myimage:tag
+    ```
+
+    For token-based authentication:
+
+    ```bash
+    export SYFT_REGISTRY_AUTH_AUTHORITY=registry.example.com
+    export SYFT_REGISTRY_AUTH_TOKEN=mytoken
+
+    syft registry:registry.example.com/myimage:tag
+    ```
+  </Step>
+  <Step title="Via configuration file">
+    Add an `auth` block to your Syft config file (`.syft.yaml`):
+
+    ```yaml
+    registry:
+      auth:
+        - authority: registry.example.com
+          username: myuser
+          password: mypassword
+    ```
+
+    For token-based auth:
+
+    ```yaml
+    registry:
+      auth:
+        - authority: registry.example.com
+          token: mytoken
+    ```
+  </Step>
+  <Step title="TLS client certificates">
+    For mTLS authentication provide the cert and key paths:
+
+    ```bash
+    export SYFT_REGISTRY_AUTH_AUTHORITY=registry.example.com
+    export SYFT_REGISTRY_AUTH_TLS_CERT=/path/to/client.crt
+    export SYFT_REGISTRY_AUTH_TLS_KEY=/path/to/client.key
+
+    syft registry:registry.example.com/myimage:tag
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+Set `SYFT_REGISTRY_AUTH_AUTHORITY` to an empty string to apply credentials to all registries (useful in CI).
+</Tip>
+
+### Insecure registries
+
+```bash
+# Skip TLS verification (not recommended for production)
+syft registry:myregistry.local/myimage:tag \
+  --config <(echo 'registry: {insecure-skip-tls-verify: true}')
+```
+
+## Output examples
+
+```bash
+# Human-readable table (default)
+syft alpine:latest
+
+# Syft JSON to stdout
+syft alpine:latest -o json
+
+# CycloneDX JSON to a file
+syft alpine:latest -o cyclonedx-json=./sbom.cdx.json
+
+# SPDX 2.3 Tag-Value to stdout
+syft alpine:latest -o spdx
+
+# Multiple formats at once
+syft alpine:latest -o spdx-json=./sbom.spdx.json -o cyclonedx-json=./sbom.cdx.json
+```
+
+For the full list of output formats and versioning options, see the [Output formats](/guides/output-formats) guide.

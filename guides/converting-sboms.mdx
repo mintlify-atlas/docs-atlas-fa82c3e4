@@ -1,0 +1,109 @@
+---
+title: "Converting SBOM formats"
+description: "Use syft convert to translate an existing SBOM between CycloneDX, SPDX, and Syft JSON formats."
+---
+
+`syft convert` is an experimental command that translates an existing SBOM file from one format to another — without re-scanning the source. This is useful when a downstream tool requires a different format than the one originally produced.
+
+<Warning>
+`syft convert` is an **experimental** feature. Run `syft convert -h` for the latest usage notes. Some metadata may be lost when converting between formats — see [Conversion fidelity](#conversion-fidelity) below.
+</Warning>
+
+## Command syntax
+
+```bash
+syft convert [SOURCE-SBOM] -o [FORMAT]
+```
+
+| Argument | Description |
+|---|---|
+| `SOURCE-SBOM` | Path to an existing SBOM file, or `-` to read from stdin. |
+| `-o FORMAT` | Target format (and optional `=<file>` destination). |
+
+## Examples
+
+<CodeGroup>
+```bash Syft JSON to SPDX JSON
+syft convert img.syft.json -o spdx-json
+```
+
+```bash Syft JSON to CycloneDX JSON (file output)
+syft convert img.syft.json -o cyclonedx-json=img.cdx.json
+```
+
+```bash CycloneDX JSON to SPDX Tag-Value
+syft convert img.cdx.json -o spdx-tag-value=img.spdx
+```
+
+```bash From stdin to SPDX JSON
+syft convert - -o spdx-json < img.syft.json
+```
+</CodeGroup>
+
+## Supported target formats
+
+Any format supported by `syft scan -o` can be used as the target. The most common conversions are:
+
+| Target format flag | Description |
+|---|---|
+| `syft-json` | Syft native JSON |
+| `cyclonedx-json` | CycloneDX JSON (default version 1.6) |
+| `cyclonedx-json@<ver>` | CycloneDX JSON at a specific version (1.2–1.6) |
+| `cyclonedx-xml` | CycloneDX XML (default version 1.6) |
+| `cyclonedx-xml@<ver>` | CycloneDX XML at a specific version (1.0–1.6) |
+| `spdx-json` | SPDX JSON (default version 2.3) |
+| `spdx-json@<ver>` | SPDX JSON at a specific version (2.2–2.3) |
+| `spdx-tag-value` | SPDX Tag-Value (default version 2.3) |
+| `spdx-tag-value@<ver>` | SPDX Tag-Value at a specific version (2.1–2.3) |
+| `table` | Human-readable table |
+| `text` | Plain-text list |
+
+## Version pinning
+
+Append `@<version>` to pin the output to a specific spec version:
+
+```bash
+# Convert to CycloneDX 1.4 JSON
+syft convert img.syft.json -o cyclonedx-json@1.4
+
+# Convert to SPDX 2.2 Tag-Value
+syft convert img.syft.json -o spdx-tag-value@2.2
+```
+
+## Multiple output formats
+
+`syft convert` supports the same multi-output syntax as `syft scan`:
+
+```bash
+syft convert img.syft.json \
+  -o spdx-json=./sbom.spdx.json \
+  -o cyclonedx-json=./sbom.cdx.json
+```
+
+## Reading from stdin
+
+Use `-` as the source to pipe an SBOM through the command:
+
+```bash
+cat img.syft.json | syft convert - -o cyclonedx-json
+```
+
+Or chain directly from `syft scan`:
+
+```bash
+syft scan alpine:latest -o syft-json | syft convert - -o spdx-json
+```
+
+## Conversion fidelity
+
+Syft's internal SBOM model is richer than what any single external format can express. When converting:
+
+- **Syft JSON → CycloneDX / SPDX**: Some Syft-specific metadata fields have no equivalent in the target format and are dropped.
+- **CycloneDX / SPDX → Syft JSON**: Fields not present in the source format will be absent in the result.
+- **CycloneDX ↔ SPDX**: Both formats have unique fields. A round-trip through Syft JSON may produce a different document than a direct conversion.
+
+For detailed information on what is and isn't preserved, see the [format conversion wiki page](https://github.com/anchore/syft/wiki/format-conversion).
+
+<Info>
+For the highest-fidelity SBOM, generate directly in the target format using `syft scan -o <format>` rather than converting after the fact.
+</Info>

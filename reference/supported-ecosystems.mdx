@@ -1,0 +1,514 @@
+---
+title: "Supported ecosystems"
+description: "All package ecosystems and formats that Syft can detect and catalog."
+---
+
+Syft uses a plugin-style cataloger system. Each cataloger is responsible for one or more ecosystems. The sections below describe every ecosystem Syft supports, what it detects, and which files or manifests it reads.
+
+Use `syft cataloger list` to see the full list of active catalogers for a given scan, and `syft cataloger list -o json` to inspect tags and names programmatically.
+
+---
+
+## OS / System packages
+
+<AccordionGroup>
+
+<Accordion title="Alpine Linux (apk)">
+
+Catalogs packages installed via the Alpine Package Keeper.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `alpine` |
+| Package type | APK |
+| Files read | `/lib/apk/db/installed`, `/etc/alpine-release` |
+| What is detected | Installed package name, version, architecture, origin, license, maintainer, dependency list |
+
+</Accordion>
+
+<Accordion title="Arch Linux (pacman / ALPM)">
+
+Catalogs packages installed via the Arch Linux Package Manager.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `arch` |
+| Package type | ALPM |
+| Files read | `/var/lib/pacman/local/*/desc`, `/var/lib/pacman/local/*/files` |
+| What is detected | Package name, version, description, architecture, packager, installed files, dependencies, provides |
+
+</Accordion>
+
+<Accordion title="Debian / Ubuntu (dpkg)">
+
+Catalogs packages installed via the Debian package manager.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `debian` |
+| Package type | deb |
+| Files read | `/var/lib/dpkg/info/*.list`, `/var/lib/dpkg/status`, `/var/lib/dpkg/status.d/*` |
+| What is detected | Package name, version, architecture, maintainer, installed files, source package |
+
+</Accordion>
+
+<Accordion title="Red Hat / RPM-based (rpm)">
+
+Catalogs packages installed via the RPM Package Manager. Supports RHEL, CentOS, Fedora, Amazon Linux, Oracle Linux, and other RPM-based distributions.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `redhat` |
+| Package type | rpm |
+| Files read | RPM database at `/var/lib/rpm/`, `/usr/lib/sysimage/rpm/`, BerkeleyDB and SQLite formats |
+| What is detected | Package name, version, epoch, release, architecture, vendor, license, installed files, GPG signature |
+
+</Accordion>
+
+<Accordion title="Gentoo (portage)">
+
+Catalogs packages installed via the Gentoo package manager.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `gentoo` |
+| Package type | portage |
+| Files read | `/var/db/pkg/*/*/` VDB entries |
+| What is detected | Package name, version, installed files, USE flags |
+
+</Accordion>
+
+<Accordion title="Snap packages">
+
+Catalogs snaps installed via the Snap package manager.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `snap` |
+| Package type | snap |
+| Files read | `/var/lib/snapd/snaps/`, snap metadata YAML |
+| What is detected | Snap name, version, license, summary |
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Language ecosystems
+
+<AccordionGroup>
+
+<Accordion title="Go">
+
+Catalogs Go modules declared in source manifests and embedded in compiled binaries.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `go`, `golang` |
+| Package type | go-module |
+| Files read | `go.mod`, `go.sum`, compiled Go binaries (embedded build info) |
+| What is detected | Module path, version, checksum, licenses (optionally via local mod cache or remote fetch) |
+
+<Tip>
+Enable remote license fetching with `--enrich golang` or by setting `golang.search-remote-licenses: true` in the config file.
+</Tip>
+
+</Accordion>
+
+<Accordion title="Python">
+
+Catalogs Python packages installed in site-packages or declared in project manifests.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `python` |
+| Package type | python |
+| Files read | `*.dist-info/METADATA`, `*.egg-info/PKG-INFO`, `setup.py`, `setup.cfg`, `pyproject.toml`, `requirements*.txt`, `Pipfile`, `Pipfile.lock`, `poetry.lock` |
+| What is detected | Package name, version, author, license, homepage, direct dependencies |
+
+</Accordion>
+
+<Accordion title="Java / JVM">
+
+Catalogs Java packages in JAR, WAR, EAR archives and Maven/Gradle manifests.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `java`, `maven` |
+| Package type | java-archive |
+| Files read | `pom.xml`, `pom.properties`, `META-INF/MANIFEST.MF`, `.jar` / `.war` / `.ear` / `.jpi` archives |
+| What is detected | Group ID, artifact ID, version, digest, virtual packages embedded in archives |
+
+<Tip>
+Enable Maven Central lookups with `--enrich java` to resolve additional metadata for incomplete POM entries.
+</Tip>
+
+</Accordion>
+
+<Accordion title="JavaScript / Node.js">
+
+Catalogs npm and yarn packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `javascript`, `node`, `npm` |
+| Package type | npm |
+| Files read | `package.json`, `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `node_modules/**/package.json` |
+| What is detected | Package name, version, license, homepage, author, dev/prod dependency classification |
+
+</Accordion>
+
+<Accordion title="Ruby">
+
+Catalogs Ruby gems.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `ruby` |
+| Package type | gem |
+| Files read | `*.gemspec`, `Gemfile.lock`, `gems/*/gemspec` |
+| What is detected | Gem name, version, authors, homepage, installed files |
+
+</Accordion>
+
+<Accordion title="Rust">
+
+Catalogs Rust crates.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `rust` |
+| Package type | rust-crate |
+| Files read | `Cargo.lock`, cargo-auditable data embedded in compiled binaries |
+| What is detected | Crate name, version, source registry |
+
+</Accordion>
+
+<Accordion title="PHP">
+
+Catalogs PHP packages managed by Composer.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `php` |
+| Package type | php-composer-package |
+| Files read | `composer.json`, `composer.lock`, `installed.json` |
+| What is detected | Package name, version, license, authors |
+
+</Accordion>
+
+<Accordion title=".NET / NuGet">
+
+Catalogs .NET packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `dotnet` |
+| Package type | dotnet |
+| Files read | `*.deps.json`, `*.nuspec`, `packages.lock.json`, portable executable (PE) metadata |
+| What is detected | Package name, version, SHA-512 hash, DLL metadata |
+
+</Accordion>
+
+<Accordion title="Swift">
+
+Catalogs Swift packages managed by the Swift Package Manager.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `swift` |
+| Package type | swift |
+| Files read | `Package.resolved`, `Package.swift` |
+| What is detected | Package name, version, source URL |
+
+</Accordion>
+
+<Accordion title="Dart / Flutter">
+
+Catalogs Dart pub packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `dart` |
+| Package type | dart-pub-package |
+| Files read | `pubspec.yaml`, `pubspec.lock` |
+| What is detected | Package name, version, hosted URL |
+
+</Accordion>
+
+<Accordion title="Elixir">
+
+Catalogs Elixir Mix packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `elixir` |
+| Package type | hex |
+| Files read | `mix.lock` |
+| What is detected | Package name, version, checksum |
+
+</Accordion>
+
+<Accordion title="Erlang">
+
+Catalogs Erlang OTP applications.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `erlang` |
+| Package type | erlang-otp-package |
+| Files read | `rebar.lock` |
+| What is detected | Package name, version |
+
+</Accordion>
+
+<Accordion title="Haskell">
+
+Catalogs Haskell Cabal/Stack packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `haskell` |
+| Package type | hackage |
+| Files read | `cabal.project.freeze`, `stack.yaml`, `stack.yaml.lock` |
+| What is detected | Package name, version, pangram hash |
+
+</Accordion>
+
+<Accordion title="OCaml">
+
+Catalogs OCaml OPAM packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `ocaml` |
+| Package type | opam |
+| Files read | `*.opam`, `opam.locked`, `opam.export` |
+| What is detected | Package name, version, homepage |
+
+</Accordion>
+
+<Accordion title="R">
+
+Catalogs R packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `r` |
+| Package type | r-package |
+| Files read | `DESCRIPTION`, `renv.lock`, `packages.lock` |
+| What is detected | Package name, version, title, license, author |
+
+</Accordion>
+
+<Accordion title="Lua">
+
+Catalogs Lua packages managed by LuaRocks.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `lua` |
+| Package type | lua-rocks-package |
+| Files read | `*.rockspec`, `.luarocks/config*.lua` |
+| What is detected | Package name, version |
+
+</Accordion>
+
+<Accordion title="SWI-Prolog">
+
+Catalogs SWI-Prolog packages from the SWI Pack system.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `swipl` |
+| Package type | swipl-pack |
+| Files read | `pack.pl` |
+| What is detected | Package name, version, title, author |
+
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Infrastructure and other
+
+<AccordionGroup>
+
+<Accordion title="Terraform">
+
+Catalogs Terraform provider dependencies declared in lock files.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `terraform` |
+| Package type | terraform-provider |
+| Files read | `.terraform.lock.hcl` |
+| What is detected | Provider source address, locked version, version constraints, platform hashes |
+
+</Accordion>
+
+<Accordion title="GitHub Actions">
+
+Catalogs GitHub Actions used in CI workflows.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `github-actions` |
+| Package type | github-action |
+| Files read | `.github/workflows/*.yml`, `.github/workflows/*.yaml` |
+| What is detected | Action name and pinned ref/version |
+
+</Accordion>
+
+<Accordion title="Nix">
+
+Catalogs Nix derivations in a Nix store.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `nix` |
+| Package type | nix |
+| Files read | `/nix/store/*/` derivation paths |
+| What is detected | Derivation name, version, output paths, owned files |
+
+</Accordion>
+
+<Accordion title="Homebrew">
+
+Catalogs Homebrew formulae installed in a Homebrew prefix.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `homebrew` |
+| Package type | homebrew |
+| Files read | `$(brew --prefix)/Cellar/*` INSTALL_RECEIPT.json files |
+| What is detected | Formula name, version, tap |
+
+</Accordion>
+
+<Accordion title="Binary classifiers">
+
+Identifies well-known binaries that do not carry a package manifest (e.g. `busybox`, `openssl`, `node`, `python` executables).
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `binary` |
+| Package type | binary |
+| Files read | ELF and PE binaries matched against a classifier catalogue |
+| What is detected | Application name and version extracted from binary strings or ELF metadata |
+
+</Accordion>
+
+<Accordion title="Bitnami">
+
+Catalogs packages installed via the Bitnami component catalog, commonly found in Bitnami container images.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `bitnami` |
+| Package type | bitnami |
+| Files read | Bitnami metadata files in `/opt/bitnami/` |
+| What is detected | Component name, version, architecture |
+
+</Accordion>
+
+<Accordion title="Linux kernel and modules">
+
+Catalogs the Linux kernel version and loadable kernel modules.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `kernel` |
+| Package type | linux-kernel, linux-kernel-module |
+| Files read | `vmlinuz`, `/lib/modules/**/*.ko` kernel module files |
+| What is detected | Kernel version string, module name, version, author, license |
+
+</Accordion>
+
+<Accordion title="AI / GGUF models">
+
+Catalogs AI model files in GGUF format and OCI model artifacts.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `ai` |
+| Package type | ml-model |
+| Files read | `*.gguf` files; OCI model registry artifacts (`oci-model-registry:` scheme) |
+| What is detected | Model name, version, architecture, quantization, parameter count, license |
+
+```bash
+# Scan an OCI model artifact
+syft oci-model-registry:ai/llama3.2 -o syft-json
+```
+
+</Accordion>
+
+<Accordion title="WordPress plugins">
+
+Catalogs WordPress plugins installed in a WordPress instance.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `wordpress` |
+| Package type | wordpress-plugin |
+| Files read | `wp-content/plugins/*/*.php` plugin header comments |
+| What is detected | Plugin name, version, author, author URI |
+
+</Accordion>
+
+<Accordion title="SBOM re-cataloging">
+
+Reads an existing SBOM document (in any supported format) as a source, re-emitting its packages.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `sbom` |
+| Files read | Any SBOM file passed as the scan source |
+| What is detected | All packages declared in the input SBOM |
+
+</Accordion>
+
+<Accordion title="Conda">
+
+Catalogs Python packages installed via conda.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `conda` |
+| Package type | conda |
+| Files read | `conda-meta/*.json` |
+| What is detected | Package name, version, build string, channel |
+
+</Accordion>
+
+<Accordion title="C / C++">
+
+Catalogs C and C++ packages defined in Conan manifests.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `cpp` |
+| Package type | conan |
+| Files read | `conanfile.txt`, `conanfile.py`, `conan.lock` |
+| What is detected | Package name, version, license |
+
+</Accordion>
+
+<Accordion title="Linux capabilities">
+
+Catalogs file capabilities set on executables.
+
+| Detail | Value |
+|---|---|
+| Cataloger tag | `capabilities` |
+| What is detected | POSIX capability bits on ELF executables |
+
+<Note>
+The capabilities cataloger is experimental. Enable it with `SYFT_EXP_CAPABILITIES=true`.
+</Note>
+
+</Accordion>
+
+</AccordionGroup>
